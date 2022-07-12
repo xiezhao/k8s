@@ -11,7 +11,30 @@ pvc 和 pod类似，pod是消耗节点node资源，pvc消耗的是pv资源，pod
 
 假如我们需要存储能力比较大存储资源，如果一个一个去对比pv，这样很消耗资源，这个时候引入了pvc，在创建pod的时候会附带一个pvc的请求，pvc的请求相当于就是去寻找一个合适的pv，进行绑定，这样我们的pod就会使用到这个pv了，也就是说让我们的pvc去寻找pv，而不是我们的pod资源去寻找
 
+PVC若没有绑定会一直等待，直到符合条件的PV被创建
+
+active 的 pv和pvc被删除时，pvc等不再被任何pod使用时删除，pv等不被任何pvc使用时
+
 </font>
+
+<font size=2 color=red>
+storageClassName 指定pv的class为nfs，相当于为pv设置了一个分类，pvc可以指定class申请对应的class的pv，不写就在默认的class里面去找
+</font><br/>
+
+<font size=2>
+    删除pvc之后，pv也会释放掉，从bound到released
+</font>
+```
+[minikube@localhost ~]$ kubectl delete -f nginx-pvc-2g.yaml 
+persistentvolumeclaim "nginx-pvc-2g" deleted
+[minikube@localhost ~]$ 
+[minikube@localhost ~]$ 
+[minikube@localhost ~]$ kubectl get pv
+NAME          CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM               STORAGECLASS   REASON   AGE
+nginx-pv-1g   1Gi        RWX            Retain           Available                       nfs                     23h
+nginx-pv-2g   2Gi        RWX            Retain           Released    test/nginx-pvc-2g   nfs                     23h
+[minikube@localhost ~]$
+```
 
 
 ![](./images/nfs-pv-pvc.png)
@@ -188,6 +211,14 @@ nginx-2g
 
 ##b. pvc 去挂载 storageClass 
 StorageClass是一个找不到合适pv之后可以自动创建的pv的一个机制
+storageClass用来创建pvc需要的pv，由provisioner组件动态创建
+
+在实际工作中，使用StorageClass更多的是StatefulSet类型的服务，StatefulSet类型的服务也可以通过一个 volumeClaimTemplates属性来直接使用 StorageClass
+
+自动创建的 PV 以${namespace}-${pvcName}-${pvName}这样的命名格式创建在 NFS 服务器上的共享数据目录中
+而当这个 PV 被回收后会以archieved-${namespace}-${pvcName}-${pvName}这样的命名格式存在 NFS 服务器上
+
+因为statefulSet有状态的服务，pod名字也会是固定的
 
 
 
