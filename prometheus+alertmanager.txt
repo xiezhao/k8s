@@ -1,0 +1,136 @@
+1. prometheus安装
+
+
+# /lib/systemd/system/prometheus.service
+[Unit]
+Description=Prometheus Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Restart=on-failure
+RestartSec=5s
+ExecStart=/usr/local/prometheus/prometheus \
+        --config.file=/usr/local/prometheus/prometheus.yml \
+        --storage.tsdb.path=/usr/local/prometheus/data \
+        --storage.tsdb.retention=15d \
+        --log.format=json \
+        --web.enable-lifecycle
+[Install]
+WantedBy=multi-user.target
+
+
+
+2. grafana
+    直接docker安装就可以
+
+
+3. alertmanager安装
+
+[Unit]
+Description=alertmanager
+
+[Service]
+WorkingDirectory=/usr/local/alertmanager/
+ExecStart=/usr/local/alertmanager/alertmanager --config.file=/usr/local/alertmanager/alertmanager.yml --storage.path=/usr/local/alertmanager/data --web.listen-address=:9093 --data.retention=120h
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+检查配置文件：
+  ./amtool check-config alertmanager.yml
+  ./promtool check config prometheus.yml
+重新加载配置文件：
+  curl -X POST http://localhost:9090/-/reload
+
+
+
+
+
+
+
+
+
+
+
+
+global:
+    全局配置，主要配置告警方式，如邮件，webhook等
+route：
+    Prometheus告警先到达alertmanager都根路由（不能包含任何匹配项），所有告警的入口点
+    根路由配置一个接收器(receiver)，处理那些没有匹配到任何子路由的告警（没有配置子路由，全部由根路由发送告警）
+group_by:
+    用于分组聚合，对告警通知按标签(label)进行分组，将具有相同标签或相同告警名称(alertname)的告警通知聚合在一个组，
+    然后作为一个通知发送。如果想完全禁用聚合，可以设置为group_by:[...]
+group_wait:
+    当一个新的告警组被创建时，需要等待'group_wait'后才发送初始通知。这样可以确保在发送等待前能收集更多具有相同标签的告警，最后合并为一个通知发送。
+group_interval:
+    当第一次告警通知发出后，等待'group_interval'时间后，开始发送为该组触发的新告警，可以理解为，group相当于一个通道(channel)
+repeat_interval:
+    告警通知成功发送后，若问题一直未恢复，需再次重复发送的间隔
+
+
+
+
+
+node_rules.yml
+
+groups:
+  - name: node_rules
+    rules:
+    - record: instance:node_cpu_usage
+      expr: 100 - avg(irate(node_cpu_seconds_total){mode="idle"}[1m])) by (nodename) * 100
+      labels:
+        metric_type: cpu_monitor
+
+    - record: instance: node_1m_load
+      expr: node_load1
+      labels:
+        metric_type: load1m_monitor
+
+    - record: instance: node_mem_usage
+      expr: 100 - (node_memory_MemAvailable_bytes)/(node_memory_MemTotal_bytes) * 100
+      labels:
+        metric_type: Memory_monitor
+
+    - record: instance: node_root_partition_monitor
+      expr: round(predict_linear(node_filesystem_free_bytes{device="rootfs", mountpoint="/"}[2h],12*3600)/(1024*1024*1024), 2)
+      labels:
+        metric_type: root_partition_monitor
+
+
+
+node_alerts.yml
+
+groups:
+  - name: node_alerts
+    rules:
+    - alert: cpu_usage_over_threshold
+      expr: instance:node_cpu_usage > 80
+      for: 1m   #持续时间
+      labels:
+        severity: warning
+      annotations:
+        summary: 主机{{ $labels.nodename }} 的cpu使用率持续1分钟超出阈值80%，当前为 {{$value}} %
+
+    - alert: system_1m_load_over_threshold
+      expr: instance:node_1m_load > 20
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: 主机{{ $labels.nodename }} 的1分负载超出阈值20%，当前为 {{$value}} %
+
+    - alert: mem_usage_over_threshold
+      expr: instance:node_mem_usage > 80
+      for: 1m
+      annotations:
+        summary: 主机{{ $labels.nodename }} 的内存使用率持续1分钟超出阈值，当前为 {{$value}} %
+
+    - alert: root_partition_usage_over_threshold
+      expr: instance:node_root_partition_predit < 60
+      for: 1m
+      annotations:
+        summary: 主机{{ $labels.nodename }} 的磁盘根分区预计在12小时使用将达到 {{$value}}GB，请及时扩容 %
