@@ -21,12 +21,18 @@ ExecStart=/usr/local/prometheus/prometheus \
 WantedBy=multi-user.target
 
 
+systemctl enable prometheus
+systemctl start prometheus
+
+
 
 2. grafana
     直接docker安装就可以
 
 
 3. alertmanager安装
+
+# /lib/systemd/system/alertmanager.service
 
 [Unit]
 Description=alertmanager
@@ -38,6 +44,12 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
+
+
+
+systemctl enable alertmanager
+systemctl start alertmanager
+
 
 检查配置文件：
   ./amtool check-config alertmanager.yml

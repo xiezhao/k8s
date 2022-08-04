@@ -1,0 +1,66 @@
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+
+如果要自定义加入以下依赖
+
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+
+
+Register the bean to your @SpringBootApplication or @Configuration class
+
+
+// io.micrometer.core.aop.TimedAspect
+// org.springframework.context.annotation.Bean
+// io.micrometer.core.instrument.MeterRegistry
+
+@Bean
+public TimedAspect timedAspect(MeterRegistry registry) {
+    return new TimedAspect(registry);
+}
+
+
+#使用
+// io.micrometer.core.annotation.Timed
+
+@Timed(value = "greeting.time", description = "Time taken to return greeting")
+public Greeting getGreeting() {
+    return new Greeting());
+}
+
+#可以自己写一个健康检查接口，用来做监控检查
+
+
+
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.prometheus.enabled=true
+management.endpoint.health.enabled=true
+management.endpoint.health.show-details=always
+management.metrics.export.prometheus.enabled=true
+management.metrics.export.health.enabled=true
+
+management.endpoint.health.probes.enabled=true
+management.endpoints.web.path-mapping.health: healthz  #配置这个为health监控检查的二级目录，好像必须配置
+
+如果不配置 basepath：
+    management.endpoints.web.base-path=/actuator
+    则默认是： /actuator
+
+    访问为： http://localhost:port/actuator/prometheus(health,info)
+    springboot健康检查访问：可以用于k8s中
+        liveness：http://localhost:port/actuator/healthz/liveness
+        readness: http://localhost:port/actuator/healthz/readiness
+
+        {
+            status: "UP"
+        }
+
