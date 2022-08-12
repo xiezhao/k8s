@@ -1,0 +1,70 @@
+安装telegraf 然后修改prometheus 然后用pastat_looking_up 先监控进程 
+然后再用exec 写脚本监控接口
+
+
+
+
+#下载二进制包
+wget https://ghproxy.com/https://github.com/influxdata/telegraf/archive/refs/tags/v1.22.4.tar.gz
+tar xf v1.22.4.tar.gz -C /opt
+mv /opt/telegraf-1.22.4/   /opt/telegraf
+
+
+#将telegraf添加至systemd管理
+cat <<  eof  >> /etc/systemd/system/telegraf.service 
+[Unit]
+Description="telegraf"
+After=network.target
+
+[Service]
+Type=simple
+
+ExecStart=/opt/telegraf/usr/bin/telegraf --config /opt/telegraf/etc/telegraf/telegraf.conf --config-directory /opt/telegraf/etc/telegraf/telegraf.d/
+WorkingDirectory=/opt/telegraf
+
+SuccessExitStatus=0
+LimitNOFILE=65536
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=telegraf
+KillMode=process
+KillSignal=SIGQUIT
+TimeoutStopSec=5
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target
+eof
+systemctl daemon-reload
+
+
+
+测试：
+    telegraf --config /etc/telegraf/telegraf.conf --test --input-filter http_response
+
+
+配置：
+
+//检查端口
+
+[[inputs.net_response]]
+   protocol = "tcp"
+   address = "localhost:9273"
+   timeout = "5s"
+   fielddrop = ["result_type", "string_found"]
+   tagexclude = ["result"]
+
+//检查URL
+
+ [[inputs.http_response]]
+    urls = ["http://172.29.214.134:9900/actuator/healthz/liveness"]
+    method = "GET"
+    response_string_match = "\".*status\".?:.?\"UP\""
+
+
+
+
+http_response_response_string_match{host="prometheus",method="GET",result="success",result_type="success",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code="200"} 1
+http_response_result_code{host="prometheus",method="GET",response_body="",result="connection_failed",result_type="connection_failed",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code=""} 3
+http_response_result_code{host="prometheus",method="GET",response_body="{\"status\":\"UP\"}",result="success",result_type="success",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code="200"} 0

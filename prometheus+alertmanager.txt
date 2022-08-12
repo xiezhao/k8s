@@ -1,3 +1,17 @@
+疑问:
+  1. 不同主机，需要监控的数据不同，alertmanager怎么知道要去哪个主机里面监控主机的rule？
+    Prometheus监控中，使用的是 PromSQL，比如 net_response_result_code，查询的是Prometheus监控的所有的主机有这个指标的，会去自己的TSDB中查找
+    所以所有这个指标不满足alertmanager的alert的话，则alertmanager都会去通知，而不管是什么主机
+    所以alertmanager中关心的是指标，而不需要关心什么服务跑在什么环境或者什么机器中，只要满足这个alert就报警
+    因为Prometheus会把所有的主机暴露这个metrics的数据查出来
+
+
+
+
+
+
+
+
 1. prometheus安装
 
 
@@ -116,6 +130,10 @@ groups:
 
 node_alerts.yml
 
+
+
+
+
 groups:
   - name: node_alerts
     rules:
@@ -125,7 +143,10 @@ groups:
       labels:
         severity: warning
       annotations:
-        summary: 主机{{ $labels.nodename }} 的cpu使用率持续1分钟超出阈值80%，当前为 {{$value}} %
+        #发出的告警标题
+        summary: "实例 {{ $labels.instance }} CPU 使用率过高"
+        #发出的告警内容
+        description: "实例{{ $labels.instance }} CPU 使用率超过 85% (当前值为: {{ $value }})"
 
     - alert: system_1m_load_over_threshold
       expr: instance:node_1m_load > 20
@@ -146,3 +167,96 @@ groups:
       for: 1m
       annotations:
         summary: 主机{{ $labels.nodename }} 的磁盘根分区预计在12小时使用将达到 {{$value}}GB，请及时扩容 %
+
+
+
+
+alertmanager.yaml 示例：
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.qq.com:465'
+  smtp_from: '145xxx8387@qq.com'
+  smtp_auth_username: '1451578387@qq.com'
+  smtp_auth_identity: 'xxxxx'
+  smtp_auth_password: 'xxxxx'
+  smtp_require_tls: false
+
+# 根路由，不能存在 match和match_re，任何告警数据没有匹配到路由时，将会由此根路由进行处理。
+route:
+  group_by: ['job']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 120s
+  receiver: 'default-receiver'
+  routes:
+  - match_re:
+      alertname: 'Cpu.*'  # 如果告警的名字是以 Cpu 开头的发给 receiver-01
+    receiver: 'receiver-01'
+  - match:
+      alertname: 'InstanceDown' # 如果告警的名字是 InstanceDown 则发送给 receiver-02
+    receiver: 'receiver-02'
+    group_by: ['instance'] # 根据 instance 标签分组
+    continue: true  # 为true则还需要去匹配子路由。
+    routes:
+    - match:
+        alertname: 'InstanceDown' # 如果告警的名字是 InstanceDown 则还是需要发送给 receiver-03
+      receiver: 'receiver-03'
+
+# 定义4个接收人（接收组等等）
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: '145xxx8387@qq.com'
+        send_resolved: true
+  - name: 'receiver-01'
+    email_configs:
+      - to: '2469xxx193@qq.com'
+        send_resolved: true
+  - name: 'receiver-02'
+    email_configs:
+      - to: 'weixin145xxx8387@163.com'
+        send_resolved: true
+  - name: 'receiver-03'
+    email_configs:
+      - to: 'it_xxx_software@163.com'
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      alertname: Cpu02
+      severity: warning
+    target_match:
+      severity: info
+    equal:
+      - instance
+
+
+
+
+
+
+
+{
+  "version": "4",
+  "groupKey": <string>,              // key identifying the group of alerts (e.g. to deduplicate)
+  "truncatedAlerts": <int>,          // how many alerts have been truncated due to "max_alerts"
+  "status": "<resolved|firing>",
+  "receiver": <string>,
+  "groupLabels": <object>,
+  "commonLabels": <object>,
+  "commonAnnotations": <object>,
+  "externalURL": <string>,           // backlink to the Alertmanager.
+  "alerts": [
+    {
+      "status": "<resolved|firing>",
+      "labels": <object>,
+      "annotations": <object>,
+      "startsAt": "<rfc3339>",
+      "endsAt": "<rfc3339>",
+      "generatorURL": <string>,      // identifies the entity that caused the alert
+      "fingerprint": <string>        // fingerprint to identify the alert
+    },
+    ...
+  ]
+}
