@@ -249,8 +249,6 @@ service：
 
 
 
-
-
 ingress：
     NodePort性能不太好，节点如果很多，要管理N多个节点的端口
     
