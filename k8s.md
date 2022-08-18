@@ -5,8 +5,8 @@
  SELINUX=disabled
  # SELINUXTYPE=targeted
 
- systemctl stop firewalld.service
- systemctl disable firewalld.service
+systemctl stop firewalld.service
+systemctl disable firewalld.service
 
 
 
