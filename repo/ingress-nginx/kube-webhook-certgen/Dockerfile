@@ -1,2 +1,1 @@
-FROM registry.k8s.io/ingress-nginx/kube-webhook-certgen:1.3.0
-MAINTAINER rick
+FROM registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.3.0
