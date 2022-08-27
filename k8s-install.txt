@@ -39,7 +39,8 @@ k8s pod网段: 172.168.0.0/12
 
 1.3 所有节点必备工具安装
 yum install -y wget jq psmisc vim net-tools telnet yum-utils device-mapper-persistent-data lvm2 git
-yum -y install socat conntrack 
+yum -y install socat conntrack iproute-tc
+
 
 1.4 所有节点关闭防火墙等
 systemctl disable --now firewalld  
@@ -134,7 +135,6 @@ for i in k8s-master01 k8s-master02 k8s-master03 k8s-node01 k8s-node02;do ssh-cop
 所有节点上安装 kubeadm, kubelet, kubectl
 
 
-
 #vim  /etc/systemd/system/kubelet.service
 
 [Unit]
@@ -145,6 +145,7 @@ After=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/kubelet  
+#ExecStart=/usr/local/bin/kubelet --container-runtime=remote --container-runtime-endpoint=unix:///var/run/cri-dockerd.sock
 Restart=always
 StartLimitInterval=0
 RestartSec=10
@@ -153,28 +154,39 @@ RestartSec=10
 WantedBy=multi-user.target
 
 
-# 如果报错就只用上面的就行，暂时这样
 # mkdir -p /etc/systemd/system/kubelet.service.d
 #vim /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 
-[Unit]
-Description=kubelet: The Kubernetes Node Agent
-Documentation=https://kubernetes.io/docs/home/
-Wants=network-online.target
-After=network-online.target
-
+# Note: This dropin only works with kubeadm and kubelet v1.11+
 [Service]
-ExecStart=/usr/local/bin/kubelet
-Restart=always
-StartLimitInterval=0
-RestartSec=10
+Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"
 
-[Install]
-WantedBy=multi-user.target
+# This is a file that "kubeadm init" and "kubeadm join" generates at runtime, populating the KUBELET_KUBEADM_ARGS variable dynamically
+EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+# This is a file that the user can use for overrides of the kubelet args as a last resort. Preferably, the user should use
+# the .NodeRegistration.KubeletExtraArgs object in the configuration files instead. KUBELET_EXTRA_ARGS should be sourced from this file.
+EnvironmentFile=-/etc/default/kubelet
+ExecStart=
+ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
 
 
 
-配置cgroup driver ：
+# vim /var/lib/kubelet/kubeadm-flags.env
+[root@VM-4-3-centos net.d]# cat /var/lib/kubelet/kubeadm-flags.env
+KUBELET_KUBEADM_ARGS="--container-runtime=remote --container-runtime-endpoint=unix:///var/run/cri-dockerd.sock --pod-infra-container-image=k8s.gcr.io/pause:3.7"
+修改  k8s.gcr.io/pause:3.7 为 registry.aliyuncs.com/google_containers/pause:3.7
+这里改了以后
+KUBELET_KUBEADM_ARGS="--container-runtime=remote --container-runtime-endpoint=unix:///var/run/cri-dockerd.sock --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7"
+
+
+
+systemctl enable kubelet
+
+
+
+
+配置cgroup driver ：v1.22不配置，默认systemd，所以下面的不需要了
 
     Configuring a cgroup driver 
     Both the container runtime and the kubelet have a property called "cgroup driver", which is important for the management of cgroups on Linux machines.
@@ -199,6 +211,8 @@ WantedBy=multi-user.target
 
 
 可以查看都需要拉哪些镜像：
+    可以本地连接vpn下载下来，docker save成压缩包，上传到服务器上，docker load出来
+    也可以vpn下载下来，tag成自己的阿里云镜像地址，上传到阿里云镜像仓库，然后服务器pull下来，再打成对应的tag，没有第一个方便
    
     # kubeadm config images list
 
@@ -211,12 +225,32 @@ WantedBy=multi-user.target
     k8s.gcr.io/etcd:3.5.3-0
     k8s.gcr.io/coredns/coredns:v1.8.6
 
-
-kubeadm init --cri-socket='unix:///var/run/cri-dockerd.sock' --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.2
-# 如果执行超时，就可以看到都需要的 镜像以及版本，可以提前下载下来，因为镜像在国外
+kubeadm init --cri-socket='unix:///var/run/cri-dockerd.sock'
 
 
+#####配置 kubectl
+    mkdir -p $HOME/.kube
+    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 
 
-可以把镜像先下下来，然后再推到自己的镜像仓库，再下到服务器上，再打个tag。
+
+
+排错：
+    1. kubelet配置文件
+    cat /var/lib/kubelet/config.yaml |grep group
+
+
+    2、 [root@VM-4-3-centos ~]# cat /etc/kubernetes/manifests/
+    etcd.yaml                     kube-apiserver.yaml           kube-controller-manager.yaml  kube-scheduler.yaml
+
+    3. tc not found in system path
+        yum -y install iproute-tc
+
+    4. 清理node
+        kubeadm reset 
+        kubectl delete node nodeName
+        rm -rf /etc/cni/net.d
+        iptables -F
+        kubeadm reset

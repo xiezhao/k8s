@@ -23,14 +23,19 @@
     sudo systemctl restart docker
 
 
-4. 确认kubelet的配置： --cgroup-driver=systemd
+docker打包镜像：
+    docker save -o kube-apiserver-v1.24.4.tar.gz k8s.gcr.io/kube-apiserver:v1.24.4
 
-    cat /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
-    ...
-    Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --cgroup-driver=systemd"
-    ...
+在别的机器上使用：
+    docker load -i kube-apiserver-v1.24.4.tar.gz
 
-    cat /var/lib/kubelet/kubeadm-flags.env
-    ...
-    KUBELET_KUBEADM_ARGS="--cgroup-driver=systemd --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.2"
-    ...
+
+
+
+1、 安装cri-dockerd
+    参考：https://github.com/Mirantis/cri-dockerd
+    1.1 下载rpm包安装
+    1.2 修改启动文件
+        vim /usr/lib/systemd/system/cri-docker.service
+        修改：
+            ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7

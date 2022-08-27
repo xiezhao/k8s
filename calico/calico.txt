@@ -1,0 +1,14 @@
+vim /etc/NetworkManager/conf.d/calico.conf
+
+[keyfile]
+unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:vxlan-v6.calico;interface-name:wireguard.cali;interface-name:wg-v6.cali
+
+sysctl -w net.netfilter.nf_conntrack_max=1000000
+echo "net.netfilter.nf_conntrack_max=1000000" >> /etc/sysctl.conf
+
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.0/manifests/tigera-operator.yaml
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.0/manifests/custom-resources.yaml
+
+watch kubectl get pods -n calico-system
