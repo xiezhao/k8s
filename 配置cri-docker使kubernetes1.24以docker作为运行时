@@ -1,0 +1,165 @@
+从kubernetes 1.24开始，dockershim已经从kubelet中移除，但因为历史问题docker却不支持kubernetes主推的CRI（容器运行时接口）标准，
+所以docker不能再作为kubernetes的容器运行时了，即从kubernetesv1.24开始不再使用docker了。
+
+但是如果想继续使用docker的话，可以在kubelet和docker之间加上一个中间层cri-docker。cri-docker是一个支持CRI标准的shim（垫片）。
+一头通过CRI跟kubelet交互，另一头跟docker api交互，从而间接的实现了kubernetes以docker作为容器运行时。
+但是这种架构缺点也很明显，调用链更长，效率更低
+
+推荐使用containerd作为kubernetes的容器运行时
+
+或者可以用其他运行时：
+    Other options include using a different driver, using an older version of Kubernetes --kubernetes-version, or using a different container runtime --container-runtime.
+
+1. 先安装docker
+2. 在所有节点安装cri-docker
+    到下面的链接下载最新版cri-docker
+    https://github.com/Mirantis/cri-dockerd/tags
+
+    现在应该是一个 rpm包：
+        rpm -ivh cri-dockerd-0.2.5-3.el8.x86_64.rpm
+
+3. 设置系统参数
+    cat <<EOF > /etc/sysctl.d/k8s.conf
+    net.bridge.bridge-nf-call-ip6tables = 1
+    net.bridge.bridge-nf-call-iptables = 1
+    net.ipv4.ip_forward = 1
+    EOF
+
+    sysctl -p /etc/sysctl.d/k8s.conf
+
+4.创建cri-docker启动文件 <使用rpm安装的，这个已经有了>
+    启动文件从下面链接找到。
+    https://github.com/Mirantis/cri-dockerd/tree/master/packaging/systemd
+    创建cri-docker启动文件
+
+    cat /usr/lib/systemd/system/cri-docker.service
+
+    [Unit]
+    Description=CRI Interface for Docker Application Container Engine
+    Documentation=https://docs.mirantis.com
+    After=network-online.target firewalld.service docker.service
+    Wants=network-online.target
+    Requires=cri-docker.socket
+
+    [Service]
+    Type=notify
+    ExecStart=/usr/bin/cri-dockerd --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7
+    ExecReload=/bin/kill -s HUP $MAINPID
+    TimeoutSec=0
+    RestartSec=2
+    Restart=always
+
+    StartLimitBurst=3
+
+    StartLimitInterval=60s
+
+    LimitNOFILE=infinity
+    LimitNPROC=infinity
+    LimitCORE=infinity
+
+    TasksMax=infinity
+    Delegate=yes
+    KillMode=process
+
+    [Install]
+    WantedBy=multi-user.target
+
+    这里/usr/bin/cri-dockerd一定要加上参数
+    –pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7
+    用来指定所用的pause镜像是哪个，否则默认拉取k8s.gcr.io/pause:3.6，会导致安装失败
+
+
+
+    cat /usr/lib/systemd/system/cri-docker.socket
+
+    [Unit]
+    Description=CRI Docker Socket for the API
+    PartOf=cri-docker.service
+
+    [Socket]
+    ListenStream=%t/cri-dockerd.sock
+    SocketMode=0660
+    SocketUser=root
+    SocketGroup=docker
+
+    [Install]
+    WantedBy=sockets.target
+
+
+    设置开机启动：
+        systemctl daemon-reload
+        systemctl enable cri-docker
+        systemctl enable cri-docker.service
+        systemctl enable --now cri-docker.socket
+
+
+        systemctl is-active cri-docker
+
+
+
+安装如果报错：
+    [minikube@VM-4-3-centos ~]$ minikube start --vm-driver=docker --base-image="anjone/kicbase" --image-mirror-country='cn' --image-repository='registry.cn-hangzhou.aliyuncs.com/google_containers'
+    😄  minikube v1.26.1 on Centos 8.2.2004 (amd64)
+    ✨  Using the docker driver based on existing profile
+    👍  Starting control plane node minikube in cluster minikube
+    🚜  Pulling base image ...
+    🤷  docker "minikube" container is missing, will recreate.
+    🔥  Creating docker container (CPUs=2, Memory=2200MB) ...
+
+    ❌  Exiting due to RT_DOCKER_MISSING_CRI_DOCKER_NONE: sudo systemctl enable cri-docker.socket: Process exited with status 1
+    stdout:
+
+    stderr:
+    Failed to enable unit: Unit file cri-docker.socket does not exist.
+
+    💡  Suggestion: Using Kubernetes v1.24+ with the Docker runtime requires cri-docker to be installed
+    📘  Documentation: https://minikube.sigs.k8s.io/docs/reference/drivers/none
+    🍿  Related issue: https://github.com/kubernetes/minikube/issues/14410
+
+
+    执行：
+        sudo systemctl enable cri-docker.socket   可以给当前用户增加sudo权限，要么干脆让当前用户去启动docker都可以
+
+
+
+ 启动方式可以是：
+
+       通过 ps命令找到 containerd-shim，也就是cri的sock地址
+
+       [minikube@VM-4-3-centos ~]$ ps -ef |grep sock
+       root       42620       1  0 17:49 ?        00:00:01 /usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock
+       root       56183       1  0 18:26 ?        00:00:00 /usr/bin/containerd-shim-runc-v2 -namespace moby -id 0b05c54cb7452dd251941538cd6ded17561cdb91f2bf983a43755a8eb10d40cb -address /run/containerd/containerd.sock
+       root       57175   56203  0 18:27 ?        00:00:00 /usr/bin/dockerd -H tcp://0.0.0.0:2376 -H unix:///var/run/docker.sock --default-ulimit=nofile=1048576:1048576 --tlsverify --tlscacert /etc/docker/ca.pem --tlscert /etc/docker/server.pem --tlskey /etc/docker/server-key.pem --label provider=docker --insecure-registry 10.96.0.0/12
+
+       得到： -address /run/containerd/containerd.sock
+
+        --cri-socket='/run/containerd/containerd.sock'
+
+       得到启动命令：
+        具体的启动可以跟的参数可以根据  minikube start --help 来查看
+
+        minikube start --driver='docker' --container-runtime='docker' --cri-socket='/run/containerd/containerd.sock' --base-image="anjone/kicbase" --image-mirror-country='cn' --image-repository='registry.cn-hangzhou.aliyuncs.com/google_containers'
+
+
+        报错：
+            Unfortunately, an error has occurred:
+                    timed out waiting for the condition
+
+            This error is likely caused by:
+                    - The kubelet is not running
+                    - The kubelet is unhealthy due to a misconfiguration of the node in some way (required cgroups disabled)
+
+            If you are on a systemd-powered system, you can try to troubleshoot the error with the following commands:
+                    - 'systemctl status kubelet'
+                    - 'journalctl -xeu kubelet'
+
+            Additionally, a control plane component may have crashed or exited when started by the container runtime.
+            To troubleshoot, list all containers using your preferred container runtimes CLI.
+            Here is one example how you may list all running Kubernetes containers by using crictl:
+                    - 'crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps -a | grep kube | grep -v pause'
+                    Once you have found the failing container, you can inspect its logs with:
+                    - 'crictl --runtime-endpoint unix:///run/containerd/containerd.sock logs CONTAINERID'
+
+
+            解决：
+                echo "KUBELET_EXTRA_ARGS=--fail-swap-on=false" > /etc/sysconfig/kubelet
