@@ -1,0 +1,36 @@
+1.docker默认的Cgroup Driver为 cgroupfs
+    查看：docker info | grep -i "Cgroup Driver"
+
+2. 安装k8s时，kubelet使用的cgroup驱动要和docker的cgroup保持一致。
+
+3. 修改docker的cgroup driver
+
+    sudo mkdir /etc/docker
+    cat <<EOF | sudo tee /etc/docker/daemon.json
+    {
+        "exec-opts": ["native.cgroupdriver=systemd"],
+        "log-driver": "json-file",
+        "log-opts": {
+            "max-size": "100m"
+        },
+        "storage-driver": "overlay2",
+        "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
+    }
+    EOF
+
+    sudo systemctl enable docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+
+
+4. 确认kubelet的配置： --cgroup-driver=systemd
+
+    cat /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+    ...
+    Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --cgroup-driver=systemd"
+    ...
+
+    cat /var/lib/kubelet/kubeadm-flags.env
+    ...
+    KUBELET_KUBEADM_ARGS="--cgroup-driver=systemd --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.2"
+    ...
