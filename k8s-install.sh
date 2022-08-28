@@ -66,7 +66,7 @@ EOF
 
 
 # install docker 
-
+echo "================================insatll docker start=========================================================="
 rm -rf /etc/yum.repos.d/*
 
 wget -O /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-vault-8.5.2111.repo
@@ -109,13 +109,17 @@ EOF
 systemctl daemon-reload
 systemctl restart docker
 
+echo "================================insatll docker end=========================================================="
 
+
+echo "================================insatll kubeadm start=========================================================="
+
+# install kubeadm
 # install cri-dockerd
 rpm -ivh cri-dockerd-0.2.5-3.el8.x86_64.rpm
 sed -i 's#ExecStart=/usr/bin/cri-dockerd#ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7#g' /usr/lib/systemd/system/cri-docker.service
 systemctl start cri-docker.service
 
-# install kubeadm
 # docker load iamges
 docker load -i coredns-v1.8.6.tar.gz
 docker load -i kube-controller-manager-v1.24.4.tar.gz
@@ -139,7 +143,7 @@ chmod +x {kubeadm,kubelet,kubectl}
 
 mv kubeadm kubelet kubectl /usr/local/bin/
 
-cat <<EOF | tee /etc/systemd/system/kubelet.service
+cat << EOF | tee /etc/systemd/system/kubelet.service
 [Unit]
 Description=kubelet: The Kubernetes Node Agent
 Documentation=https://kubernetes.io/docs/home/
@@ -158,7 +162,7 @@ EOF
 
 mkdir -p /etc/systemd/system/kubelet.service.d
 
-cat <<EOF | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+cat << EOF | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 # Note: This dropin only works with kubeadm and kubelet v1.11+
 [Service]
 Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
@@ -169,17 +173,22 @@ EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
 # the .NodeRegistration.KubeletExtraArgs object in the configuration files instead. KUBELET_EXTRA_ARGS should be sourced from this file.
 EnvironmentFile=-/etc/default/kubelet
 ExecStart=
-ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+#$变量在eof中会被执行，所以需要转义
+ExecStart=/usr/local/bin/kubelet \$KUBELET_KUBECONFIG_ARGS \$KUBELET_CONFIG_ARGS \$KUBELET_KUBEADM_ARGS \$KUBELET_EXTRA_ARGS
 EOF
 
 
 systemctl enable --now kubelet
 systemctl start --now kubelet
 
+echo "================================ insatll kubeadm end =========================================================="
 
-rm /etc/containerd/config.toml
+
+rm -rf /etc/containerd/config.toml
 systemctl restart containerd
 
+
+echo "================================ kubeadm init start =========================================================="
 # install 
 # calico --pod-network-cidr=192.168.0.0/16
 # service-cidr 的选取不能和PodCIDR及本机网络有重叠或者冲突。 
@@ -195,12 +204,14 @@ kubeadm init --cri-socket='unix:///var/run/cri-dockerd.sock' \
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
+echo "================================ kubeadm init end =========================================================="
 
 
 #kubeadm join 10.0.4.3:6443 --token lo9z4m.bpmkldela5lmigei \
 #        --discovery-token-ca-cert-hash sha256:677123d92d5bf065fcde1e8f660f0242539000703f811e328a6b9ba0d40320e4
 
 # install calico
+echo "================================ install calico start =========================================================="
 
 cat <<EOF | tee /etc/NetworkManager/conf.d/calico.conf
 [keyfile]
@@ -218,6 +229,8 @@ kubectl create -f custom-resources.yaml
 
 chmod +x calicoctl-linux-amd64
 mv calicoctl-linux-amd64 /usr/local/bin/calicoctl
+
+echo "================================ install calico end =========================================================="
 
 
 
