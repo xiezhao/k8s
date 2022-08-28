@@ -12,3 +12,10 @@ kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.0
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.0/manifests/custom-resources.yaml
 
 watch kubectl get pods -n calico-system
+
+
+
+192.168.0.0/16
+
+
+

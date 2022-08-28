@@ -19,8 +19,13 @@ yum install docker-ce docker-ce-cli containerd.io --nogpgcheck
 所有节点设置docker加速器
 cat > /etc/docker/daemon.json <<EOF
 {
-   "registry-mirrors": ["https://frz7i079.mirror.aliyuncs.com"],
-    "exec-opts": ["native.cgroupdriver=systemd"]
+    "exec-opts": ["native.cgroupdriver=systemd"],
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "100m"
+    },
+    "storage-driver": "overlay2",
+    "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
 }
 EOF
 

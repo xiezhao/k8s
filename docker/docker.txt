@@ -5,7 +5,7 @@
 
 3. 修改docker的cgroup driver
 
-    sudo mkdir /etc/docker
+    mkdir /etc/docker
     cat <<EOF | sudo tee /etc/docker/daemon.json
     {
         "exec-opts": ["native.cgroupdriver=systemd"],
