@@ -1,0 +1,22 @@
+spring boot 加载配置文件介绍
+当应用程序启动时，Spring Boot 会自动从以下位置查找并加载 application.properties 和 application.yaml 文件。
+
+配置文件优先级从高到底的顺序如下：
+
+file:./config/ - 优先级最高（项目根路径下的/config子目录）
+
+file:./ - 优先级第二 （项目根路径下）
+
+classpath:/config/ - 优先级第三（项目resources/config下）
+
+classpath:/ - 优先级第四（项目resources根目录）
+
+高优先级配置会覆盖低优先级配置
+
+在同级目录下同时存在 application.properties 和 application.yaml 文件，那么application.properties 会覆盖 application.yaml 文件
+
+如果我们运行时想指定运行哪个环境的配置文件，可以有三种方式：
+
+在项目 resources 文件夹下的 application.properties 文件中配置 spring.profiles.active=dev 指定加载的环境
+启动 jar 时，指定 --spring.profiles.active=prod 加载的环境
+启动 jar 时，指定 --spring.config.location=target/application.properties加载配置文件位置

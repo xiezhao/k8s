@@ -1,0 +1,8 @@
+kube-proxy 支持 3 种工作模式:
+
+1. userSpace
+
+2. iptables
+
+3. ipvs
+    ipvsadm -Ln命令即可看到 ipvs规则策略

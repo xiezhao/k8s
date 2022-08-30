@@ -1,0 +1,60 @@
+ingress：
+    NodePort性能不太好，节点如果很多，要管理N多个节点的端口
+    建议：
+        ingress固定安装到某几个节点上
+
+    部署方式：
+        1. Ingress Controller 用 Deployment 方式部署，给它添加一个 Service，类型为 LoadBalancer，这样会自动生成一个 IP 地址，
+        通过这个 IP 就能访问到了，并且一般这个 IP 是高可用的（前提是集群支持 LoadBalancer，通常云服务提供商才支持，自建集群一般没有）
+
+        2. 使用集群内部的某个或某些节点作为边缘节点，给 node 添加 label 来标识，Ingress Controller 用 DaemonSet 方式部署，
+        使用 nodeSelector 绑定到边缘节点，保证每个边缘节点启动一个 Ingress Controller 实例，用 hostPort 直接在这些边缘节点宿主机暴露端口，
+        然后我们可以访问边缘节点中 Ingress Controller 暴露的端口，这样外部就可以访问到 Ingress Controller 了
+
+
+
+
+
+
+
+
+helm安装ingress:
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    helm repo list #查看添加的helm仓库
+    helm search repo ingress-nginx #查询helm仓库中的app
+
+    helm pull ingress-nginx/ingress-nginx  #第一个ingree-nginx是仓库名
+        下载后是： ingress-nginx-4.2.1.tgz
+        解压，编辑 value.yml
+            1. hostNetwork: true
+            2. dnsPolicy: ClusterFirstWithHostNet
+            3. kind: DaemonSet # DaemonSet可以更方便把ingress部署到对应节点上
+            4.
+            nodeSelector:
+              kubernetes.io/os: linux
+              ingress: "true"    #不需要所有节点部署ingress，挑部分节点安装，在node标签，ingress为true的node上安装
+                # kubectl label node docker-desktop ingress=true 给节点打上标签，扩容的时候直接给其他node打上标签就好了
+            5.
+            type: ClusterIP  #阿里云等云环境中可以用LoadBalancer，一般自己的使用 ClusterIP
+
+
+            registry: registry.k8s.io #这个可以用国内镜像。 --自己去自己阿里云镜像pull下来，打docker tag
+
+
+    helm install ingress-nginx -n ingress-nginx .
+
+
+#给node打标记
+    kubectl label node k8s-master ingress=true
+
+
+[root@k8s-master ingress-nginx]# kubectl get all -n ingress-nginx
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/ingress-nginx-controller-svrjt   1/1     Running   0          27s
+
+NAME                                         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+service/ingress-nginx-controller             ClusterIP   172.17.56.222    <none>        80/TCP,443/TCP   116s
+service/ingress-nginx-controller-admission   ClusterIP   172.22.163.220   <none>        443/TCP          116s
+
+NAME                                      DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                         AGE
+daemonset.apps/ingress-nginx-controller   1         1         1       1            1           ingress=true,kubernetes.io/os=linux   116s

@@ -1,0 +1,5 @@
+1. kube-proxy iptables, ipvs 实验
+
+2. 二进制安装k8s集群
+
+3. runtime container（cri-dockerd已使用），基于其他container安装k8s集群

@@ -1,0 +1,373 @@
+ConfigMap 是一种 API 对象，用来将非机密性的数据保存到键值对中:
+
+创建 configMap 的几种方式
+
+
+1. 使用目录创建 --from-file
+    指定在目录下的所有文件都会被用在ConfigMap里面创建一个键值对，有多少个文件就有多少个键值对，键的名字就是文件名，值就是文件的内容
+
+[root@k8s-master configMap]# tree config/
+config/
+├── mysql-config
+└── redis-config
+
+[root@k8s-master configMap]# cat config/mysql-config
+address=127.0.0.1
+port=3306
+[root@k8s-master configMap]# cat config/redis-config
+address=127.0.0.1
+port=6379
+
+#创建
+[root@k8s-master configMap]# kubectl create cm mysql-redis-config-map --from-file=./config
+configmap/mysql-redis-config-map created
+
+[root@k8s-master configMap]# kubectl get cm mysql-redis-config-map - oyaml
+apiVersion: v1
+data:
+  mysql-config: |   #键名就是文件名，值就是文件内容
+    address=127.0.0.1
+    port=3306
+  redis-config: |
+    address=127.0.0.1
+    port=6379
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2022-08-30T07:58:14Z"
+  name: mysql-redis-config-map
+  namespace: default
+  resourceVersion: "399072"
+  uid: f9ca5d10-d911-4a03-b997-9a449f777641
+
+
+
+2。使用文件创建(--from-file 这个参数可以使用多次，效果就跟指定整个目录是一样的)
+
+  kubectl create configmap [configmap名称] --from-file=[文件] --from-file=[文件]
+
+
+3。 从字面值创建(--from-literal 这个参数可以使用多次)
+
+[root@k8s-master configMap]# kubectl create  cm erp-mysql-cm --from-literal=address=127.0.0.1 --from-literal=port=3306
+configmap/erp-mysql-cm created
+
+[root@k8s-master configMap]# kubectl get cm erp-mysql-cm -oyaml
+apiVersion: v1
+data:
+  address: 127.0.0.1
+  port: "3306"
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2022-08-30T08:02:12Z"
+  name: erp-mysql-cm
+  namespace: default
+  resourceVersion: "399659"
+  uid: 1fc3f9d3-5cb1-4dd2-8e74-7007050d0449
+
+
+4. 使用 yaml 清单文件创建
+
+#yaml文件内容
+[root@k8s-master configMap]# cat redis-cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erp-redis-cm
+data:
+  # 类属性键；每一个键都映射到一个简单的值
+  address: "127.0.0.1"
+  port: "6379"
+
+  # 类文件键，键的名字就是文件名，值就是文件的内容
+  game.properties: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5
+  user-interface.properties: |
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true
+
+#执行创建
+kubectl create -f redis-cm.yaml
+
+#查看
+[root@k8s-master configMap]# cat redis-cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erp-redis-cm
+data:
+  # 类属性键；每一个键都映射到一个简单的值
+  address: "127.0.0.1"
+  port: "6379"
+
+  # 类文件键，键的名字就是文件名，值就是文件的内容
+  game.properties: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5
+  user-interface.properties: |
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true
+
+
+
+# 使用案例
+# 使用 ConfigMap 挂载springboot都配置文件
+
+    spring boot 加载配置文件的最高优先级是项目根路径下的/config子目录，所以可以将 configMap 中的配置文件挂载到容器中的项目根路径下的config子目录中
+
+1. 创建ConfigMap
+    kubectl create configMap  spring-boot-demo  --from-file=application.yaml
+
+2. 创建deployment.yaml文件，应用
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-boot-demo
+  namespace: default
+  labels:
+    app: spring-boot-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-boot-demo
+  template:
+    metadata:
+      labels:
+        app: spring-boot-demo
+    spec:
+      containers:
+        - name: spring-boot-demo
+          image: ${ORIGIN_REPO}/spring-boot-demo:${IMAGE_TAG}
+          imagePullPolicy: Always
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 200m
+              memory: 500Mi
+          # 指定配置文件挂载到 /app/config 目录下，构建镜像时的jar包也在 /app 目录下
+          volumeMounts:
+            - mountPath: /app/config
+              name: config    # 自定义的名字，需要跟 volumes.name 匹配
+      imagePullSecrets:
+        - name: docker-password
+      volumes:
+        - configMap:
+            # 指定我们创建的configMap的名字
+            name: spring-boot-demo
+          # 自定义的名字，需要跟 volumeMounts.name 匹配
+          name: config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spring-boot-demo
+  namespace: default
+  labels:
+    app: spring-boot-demo
+spec:
+  ports:
+    - name: port
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: spring-boot-demo
+  type: ClusterIP
+
+
+
+
+
+## 使用2
+环境变量实例化
+果你需要配置一个elasticsearch的有状态服务，需要进行节点的横向扩容，此时肯定需要一个ConfigMap来进行节点配置文件elasticsearch.yml的实例化。
+但是由于每个节点配置文件上都有各自定制化如IP等私有化配置，此时如果使用常规的ConfigMap处理方式，可能一个节点就需要一个ConfigMap来管理。
+这在集群规模较小的时候尚可以接受，但是如果集群规模很大，那么维护ConfigMap也是一个负担很重的工作量
+
+通过ConfigMap模板的方式来进行支持，将ConfigMap中elasticsearch.yml的变量部分通过环境变量的方式注入进来，每次在通过yaml调用ConfigMap时对ConfigMap进行实例化，然后再进行配置文件volume的挂载
+
+这样就将变化的部分交给了需要扩展应用的yaml文件来管理，在整个配置文件变更较少的场景下，这种方式的效率比较高，比较适合分布式应用或者分布式数据库这种需要横向扩展的场景
+
+
+######### 先使用 env 去创建环境变量，然后在使用 volume 挂载的时候，环境变量就会替换掉 ConfigMap 中的变量，占位符
+
+###### ConfigMap的模板文件，里面${}中的数据都需要在应用的yaml中进行实例化
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+ name: es-conf
+ namespace: test
+data:
+  elasticsearch.yml: |-
+    cluster:
+      name: ${CLUSTER_NAME}
+
+    node:
+      master: ${NODE_MASTER}
+      data: ${NODE_DATA}
+      name: ${NODE_NAME}
+      ingest: ${NODE_INGEST}
+      max_local_storage_nodes: ${MAX_LOCAL_STORAGE_NODES}
+
+    network.host: ${NETWORK_HOST}
+
+    path:
+      data: /usr/share/elasticsearch/data
+      logs: /usr/share/elasticsearch/logs
+
+    bootstrap:
+      memory_lock: ${MEMORY_LOCK}
+
+    http:
+      enabled: ${HTTP_ENABLE}
+      compression: true
+      cors:
+        enabled: ${HTTP_CORS_ENABLE}
+        allow-origin: ${HTTP_CORS_ALLOW_ORIGIN}
+
+    discovery:
+      zen:
+        ping.unicast.hosts: ${DISCOVERY_SERVICE}
+        minimum_master_nodes: ${NUMBER_OF_MASTERS}
+
+
+
+### 通过env的方式将配置映射到ConfigMap中，然后后续再通过第一种volume挂载的方式进行正常的配置文件下发即可
+env:
+    - name: NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: CLUSTER_NAME
+      value: test_es
+    - name: NUMBER_OF_MASTERS
+      value: "2"
+    - name: HTTP_CORS_ALLOW_ORIGIN
+      value: "*"
+    - name: HTTP_CORS_ENABLE
+      value: "false"
+    - name: NETWORK_HOST
+      value: "0.0.0.0"
+    - name: MAX_LOCAL_STORAGE_NODES
+      value: "1"
+    - name: NODE_MASTER
+      value: "true"
+    - name: NODE_INGEST
+      value: "false"
+    - name: NODE_DATA
+      value: "false"
+    - name: HTTP_ENABLE
+      value: "true"
+    - name: ES_JAVA_OPTS
+      value: -Xms2048m -Xmx2048m
+    - name: MEMORY_LOCK
+      value: "false"
+    - name: DISCOVERY_SERVICE
+      value: "elasticsearch-discovery"
+    - name: TZ
+      value: "Asia/Shanghai"
+
+
+通过ConfigMap模板的方式来进行支持，将ConfigMap中elasticsearch.yml的变量部分通过环境变量的方式注入进来，
+每次在通过yaml调用ConfigMap时对ConfigMap进行实例化，然后再进行配置文件volume的挂载
+这样就将变化的部分交给了需要扩展应用的yaml文件来管理，在整个配置文件变更较少的场景下，这种方式的效率比较高，
+比较适合  分布式应用  或者  分布式数据库  这种需要横向扩展的场景
+
+
+##### 如上使用环境变量做模板的
+使用 busybox，加载一个ConfigMap的模板，使用环境变量替换里面的占位符，然后打印出来
+1. 先创建一个ConfigMap
+[root@k8s-master configMap]# cat cm-template.yml
+address:${MYSQL_ADDRESS}
+
+[root@k8s-master configMap]# kubectl create cm cm-template --from-file cm-template.yml
+configmap/cm-template created
+
+2. 使用busybox挂载ConfigMap, env中设置模板占位符变量
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+  namespace: default
+spec:
+  containers:
+    - image: busybox
+      command:
+        - sleep
+        - "3600"
+      imagePullPolicy: IfNotPresent
+      name: busybox
+      env:
+      - name: MYSQL_ADDRESS
+        value: 192.168.0.1
+      volumeMounts:
+      - mountPath: /mnt/1  #把配置文件挂载到这个目录中。 名称为 cm-template.yml
+        name: config    # 自定义的名字，需要跟 volumes.name 匹配
+  volumes:
+  - configMap:
+      name: cm-template
+    name: config
+  restartPolicy: Always
+
+
+# 查看环境变量
+
+[root@k8s-master configMap]# kubectl exec -ti busybox sh
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+/ # env
+KUBERNETES_PORT=tcp://172.16.0.1:443
+KUBERNETES_SERVICE_PORT=443
+HOSTNAME=busybox
+SHLVL=1
+HOME=/root
+TERM=xterm
+KUBERNETES_PORT_443_TCP_ADDR=172.16.0.1
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+KUBERNETES_PORT_443_TCP_PORT=443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+MYSQL_ADDRESS=192.168.0.1
+
+#这样使用都时候就自动使用环境变量替换了，用的时候才替换
+/ # echo ${MYSQL_ADDRESS}
+192.168.0.1
+
+
+
+
+
+
+
+
+
+五、被挂载的 configMap内容会被自动更新
+    #注意
+    ConfigMap热更新的问题，在ConfigMap所有使用方式中，只有volume mount这种方式可以实现ConfigMap的热更新
+
+    以环境变量方式使用的 configMap数据不会被自动更新，更新这些数据需要重新启动 Pod。
+
+
+
+
+
+
+
+
+
+
+
+
