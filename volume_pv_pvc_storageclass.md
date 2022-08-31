@@ -1,3 +1,96 @@
+Volume:
+    当一个pod运行多个Container时，各个容器可能需要工项一些文件，Volume可以解决这个问题。
+    不同pod之间共享数据也可以使用
+    一些需要持久化数据的程序，或者一些需要共享数据的容器
+
+    日志收集的需求：需要在应用程序的容器里面加一个 sidecar，这个容器是一个收集日志的容器，比如filebeat，它通过volumes共享应用程序的日志文件目录
+
+emptyDir:
+    一个EmptyDir就是Host上一个空目录
+    EmptyDir是在pod被分配到Node时创建的，它的初始内容为空，并且无需指定宿主机上对应的目录文件，因为k8s会自动分配一个目录，当pod销毁时，EmptyDir中的数据也会被永久删除
+    用途：
+        1. 临时空间，例如用于某些应用程序运行时所需要的临时目录，且无需永久保留
+        2. 一个容器需要从另一个容器中获取数据的目录（多容器共享目录）
+    示例：
+        在一个pod中准备两个容器nginx和busybox，然后声明一个Volume分别挂到两个容器的目录中，然后nginx容器负责想Volume中写日志，busybox中通过命令将日志内容读取到控制台
+
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-emptydir
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    ports:
+    - containerPort: 80
+    volumeMounts: 
+    - name: logs-volume   #把这个随便开的目录挂载到 nginx容器的 /var/log/nginx 下
+      mountPath: /var/log/nginx  
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","tail -f /logs/access.log"]
+    volumeMounts:
+    - name: logs-volume #把这个随便开的目录挂载到 busybox下的/logs 下
+      mountPath: /logs
+  volumes:
+  - name: logs-volume      
+    emptyDir: {}        #在宿主机上随便开辟一个目录，这种就是随便开一个目录供nginx存，busybox取就可以，无所谓在哪个目录下
+
+
+
+
+hostPath:
+    EmptyDir中的数据不会被持久化，它会随着Pod的结束而销毁，如果想简单的将数据持久化到主机中，可以选择HostPath
+    HostPath就是将Node主机中的一个实际目录挂载到Pod中，以供容器使用，这样的设计就可以保证Pod销毁了，但是数据可以存在Node主机上
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-hostpath
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /var/log/nginx
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","tail -f /logs/access.log"]
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /logs
+  volumes:
+  - name: logs-volume
+    hostPath:
+      path: /root/logs
+      type: DirectoryOrCreate # 目录如果不存就创建
+
+    
+
+
+
+
 <font size=2>
 PersistentVolume （PV）是外部存储系统中的一块存储空间，具有持久性，生命周期独立于Pod
 

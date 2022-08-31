@@ -228,24 +228,39 @@ service：
                   protocol: TCP
 
 
-    反代k8s集群外的域名。
-        1. 手动创建service
-        #nginx-externalname.yaml
+反代k8s集群外的域名。
 
-            apiVersion: v1
-            kind: Service
-            metadata:
-              labels:
-                app: nginx-externalname
-                name: nginx-externalname
-            sepc:
-              type: ExternalName
-              externalName: www.baidu.com
+1. 手动创建service
+   1.1 从Pod中访问外部服务：
+       最简单正确的方法是创建 ExternalName service    
+#nginx-externalname.yaml
 
-     
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: nginx-externalname
+    name: nginx-externalname
+sepc:
+  type: ExternalName
+  externalName: www.baidu.com
 
 
-        
+
+  1.2 可以用于访问其他名称空间的服务:
+       namespace-a中的test-service-1，可以访问到namespace-b中的test-service-2
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service-1
+  namespace: namespace-a
+spec:
+  type: ExternalName
+  externalName: test-service-2.namespace-b.svc.cluster.local
+  ports:
+  - port: 80
+
 
 
 
