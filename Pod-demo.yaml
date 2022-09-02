@@ -1,0 +1,187 @@
+一个Pod中，容器可以通过localhost与同一pod的其他容器进行通信。
+所有pod都在同一个共享网络地址空间中，每个pod都有自己的IP，每个pod都可以通过其他pod的IP地址实现相互访问。无论pod是否在同一个工作节点上都能够相互通信。
+
+
+
+apiVersion: v1        # [必须]版本号
+kind: Pod             # [必选]Pod
+metadata:             # [必选]元数据
+  name: String        # [必选] Pod的名称
+  namespace: String   # Pod所属的命名空间, 默认为default
+  labels:             # 自定义标签列表
+    - name: String
+  annotations:        # 自定义注解列表
+    - name: String
+spec:                 # [必选]Pod详细定义
+  initContainers:     # 初始化容器,会先于containers启动.它们退出后才会启动containers中的容器
+  - name: init-myservice
+      image: docker.io/busybox
+      command: ['sh', '-c', 'echo init-service && sleep 2']
+  ###==========容器==========###
+  containers:         # [必选]Pod中容器的详细定义. 容器可以配置多个
+  - name: frontend
+      image: docker.io/kubeguide/guestbook-php-frontend:localredis
+      ports:
+        - containerPort: 80
+  - name: redis
+    image: docker.io/kubeguide/redis-master
+    ports:
+      - containerPort: 6379
+
+  - name: String      # [必选]容器的名称
+    image: String     # [必选]容器镜像名
+    imagePullPolicy: [Always | Never | IfNotPresent]    # 镜像拉取策略
+    command: [String]     # 容器的启动命令列表，如果不指定，则使用镜像打包时使用的启动命令
+    args: [String]        # 容器的启动命令参数列表
+    workingDir: String    # 容器的工作目录
+    #==========volume==========#
+    volumeMounts:         # 挂载到容器内部的存储卷配置
+      - name: String        # 需使用spec.volumes[]部分定义的共享存储卷名称
+        mountPath: Sting    # 存储卷在容器内mount的绝对路径
+        readOnly: Boolean   # 是否为只读模式，默认为读写模式
+    #==========端口==========#
+    ports:                # 容器需要暴露的端口号列表
+      - name: String        # 端口的名称
+        containerPort: Int  # 容器需要监听的端口号
+        hostPort: Int       # 容器所在主机需要监听的端口号，默认与containerPort相同。
+        protocol: String    # 端口协议，支持TCP和UDP，默认值为TCP
+    #==========环境变量==========#
+    env:                  # 容器运行前需设置的环境变量列表
+      - name: String        # 环境变量的名称
+        value: String       # 环境变量的值
+  - name: APPLOGLEVEL  #定义环境变量
+      valueFrom:
+        configMapKeyRef:
+          name: configMapNAME
+          key: configMap_KEY
+    #==========资源限制==========#
+    resources:            # 资源限制和资源请求的设置
+      limits:             # 资源最大使用量
+        cpu: "500m"       # CPU限制最大为0.5个. 通常以千分之一的CPU配额为最小单位，用m来表示。
+        memory: String    # 内存限制，单位可以为MB，GB等，将用于docker run --memory参数
+      requests:           # 资源最小申请量
+        cpu: String       # cpu请求，单位为core数，容器启动的初始可用数量
+        memory: String    # 内存请求，单位可以为MB，GB等，容器启动的初始可用数量
+    #==========健康检查==========#
+    livenessProbe:        # Pod内容器的健康检查设置，当探测无响应几次之后，系统将自动重启该容器
+      exec:               # 健康检查的具体方法之一，exec方式
+        command: [String] # exec方式需要指定的命令或者脚本
+      httpGet:            # 健康检查的具体方法之二，HTTGet方式。需要指定path、port
+        path: String
+        port: Number
+        host: String
+        scheme: String
+        httpHeaders:
+          - name: String
+            value: String
+      tcpSocket:          # 健康检查的具体方法之三，tcpSocket方式
+        port: Number
+      initialDelaySeconds: Number  # 容器启动完成后首次探测的时间，单位为s
+      timeoutSeconds: Number       # 健康检查的探测等待响应的超时时间设置，单位为s，默认值为1s
+      # 若超过该超时时间设置，则将认为该容器不健康，会重启该容器
+      periodSeconds: Number        # 健康检查的时间间隔设置，单位为s，默认10s探测一次
+      successThreshold: Number     # 失败后检查成功的最小连续成功次数,默认为1
+      failureThreshold: Number     # 当Pod成功启动且检查失败时，Kubernetes将在放弃之前尝试的次数。放弃生存检查意味着重新启动Pod
+    securityContext:
+      privileged: Boolean          # 是否开启特权，开启特权意味着可以设置内核参数
+  ###=======================###
+  restartPolicy: [Always|Never|OnFailure] # Pod的重启策略，Always:不管以何种方式终止运行都将重启
+  # OnFailure:以非0退出码退出才重启，Nerver:不重启
+  nodeSelector: object   # Pod调度策略，以key:value格式指定，Pod将被调度到具有这些Label的Node上
+  imagePullSecrets:      # pull镜像时使用的Secret名称，以name:secretkey格式指定
+    - name: String
+  hostNetwork: Boolean   # 是否使用主机网络模式，默认值为false。设置为true时，该Pod将无法在同一台宿主机上启动第二个副本
+  ###==========volume==========###
+  volumes:               # 在该Pod上定义的共享存储卷列表. 和 volumeMounts 不同的是，volumeMounts是挂在某个容器上的，而这个是挂在所有的容器上
+    - name: String      # 存储卷，类型有emptyDir，hostPath，nfs，glusterfs，cephfs等等
+      emptyDir: {}      # 类型为emptyDir的存储卷，与Pod同生命周期的一个临时目录
+      hostPath:         # 类型为hostPath的存储卷，表示将宿主机的目录挂载到Pod中
+        path: String    # 指定宿主机的目录路径
+      nfs:
+        server: String  # 指定NFS服务器的IP或域名
+        path: Path      # 指定NFS服务器共享的目录
+      secret:           # 类型为secret的存储卷，表示挂载集群预定义的secret对象到容器内部
+        secretName: String
+        items:
+          - key: String
+            path: String
+      configMap:        # 类型为configMap的存储卷，表示挂载集群预定义的configMap对象到容器内部
+        name: cm-appconfigfiles    #定义的configmap的名称
+        items:
+          - key: key-serverxml   #configmap中定义的key  key-serverxml
+            path: server.xml  #挂载后的文件名 server.xml
+
+
+
+
+
+#cm-appconfigfiles.yaml（value为文件内容）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-appconfigfiles
+data:
+  key-serverxml: |
+    xml文件内容
+  key-loggingproperties: "配置文件内容"
+
+
+
+
+
+Pod的健康检查:
+  Kubelet通过调用Pod中容器的[Handler](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#probe-v1-core)来执行检查的动作，Handler有三种类型。
+
+  - ExecAction，在容器中执行特定的命令，命令退出返回0表示成功
+  - TCPSocketAction，根据容器IP地址及特定的端口进行TCP检查，端口开放表示成功
+  - HTTPGetAction，根据容器IP、端口及访问路径发起一次HTTP请求，如果返回码在200到400之间表示成功每种检查动作都可能有三种返回状态。
+  - Success，表示通过了健康检查
+  - Failure，表示没有通过健康检查
+  - Unknown，表示检查动作失败
+
+  创建Pod时，可以通过`liveness`和`readiness`两种方式来探测Pod内容器的运行情况:
+  `liveness`:
+     可以用来检查容器内应用的存活的情况来，如果检查失败会杀掉容器进程，是否重启容器则取决于Pod的[重启策略]
+     (https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#restart-policy)
+  
+  `readiness`:
+    检查容器内的应用是否能够正常对外提供服务，如果探测失败，则Endpoint Controller会将这个Pod的IP从服务中删除
+
+
+
+livenessProbe:
+  exec:
+    command:
+      - cat
+      - /tmp/healthy
+
+livenessProbe:
+  httpGet:
+    path: /index.html
+    port: 80
+
+readinessProbe:
+  tcpSocket:
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+livenessProbe:
+  tcpSocket:
+    port: 8080
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
