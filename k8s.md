@@ -1,14 +1,3 @@
-允许master节点部署pod
-kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
-
-如果不允许调度
-kubectl taint nodes master1 node-role.kubernetes.io/master=:NoSchedule
-污点可选参数
-	  NoSchedule: 一定不能被调度
-      PreferNoSchedule: 尽量不要调度
-      NoExecute: 不仅不会调度, 还会驱逐Node上已有的Pod
-
-
 
 dockerfile：
     VOLUME /data    
@@ -261,6 +250,28 @@ spec:
   ports:
   - port: 80
 
+
+
+
+taint & toleration：
+    taint: 
+        在一类服务器上打上污点，让不能容忍这个污点的pod不能部署在打了污点的服务器上。
+        Node节点有多个Taint，每个Taint都需要容忍才能部署上去。
+        kubectl taint node k8s-master master-test=test:NoSchedule  #符合master-test=test的才会调度到这台节点上，其他禁止调度
+        kubectl taint node k8s-master master-test=test:NoExecute #符合master-test=test的才会调度到这台节点上，否则会被立马驱逐
+
+        允许master节点部署pod
+        kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
+        
+        如果不允许调度
+        kubectl taint nodes master1 node-role.kubernetes.io/master=:NoSchedule
+        污点可选参数
+        NoSchedule: 一定不能被调度
+        PreferNoSchedule: 尽量不要调度
+        NoExecute: 不仅不会调度, 还会驱逐Node上已有的Pod
+
+
+    
 
 
 
