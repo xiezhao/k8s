@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv001
+  labels:
+    pv: nfs-pv001
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: nfs
+  nfs:
+    path: /nfs/data/pv001
+    server: localhost
+
+
+# 配置说明：
+#① capacity 指定 PV 的容量为 1G。
+#② accessModes 指定访问模式为 ReadWriteOnce，支持的访问模式有：
+#
+#    ReadWriteOnce – PV 能以 read-write 模式 mount 到单个节点。
+#    ReadOnlyMany  – PV 能以 read-only  模式 mount 到多个节点。
+#    ReadWriteMany – PV 能以 read-write 模式 mount 到多个节点。
+#
+#③ persistentVolumeReclaimPolicy 指定当 PV 的回收策略为 Recycle，支持的策略有：
+#
+#    Retain   – 需要管理员手工回收。  PVC删除后，PV因Retain策略，状态为Released，无法再次创建PVC。
+      #   kubectl edit pv nfs-pv001 . 删除claimRef段落，保存后通过命令查看其状态会变更为Available，PV即可重新被使用。
+
+#    Recycle  – 清除 PV 中的数据，效果相当于执行 rm -rf /thevolume/*。
+#    Delete   – 删除 Storage Provider 上的对应存储资源
+#    例如 AWS EBS、GCE PD、Azure、Disk、OpenStack Cinder Volume 等。
+#
+#④ storageClassName 指定 PV 的 class 为 nfs。相当于为 PV 设置了一个分类，PVC 可以指定 class 申请相应 class 的 PV。
+#⑤ 指定 PV 在 NFS 服务器上对应的目录。
+
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc001
+  namespace: ingress-nginx-test   # pvc 是需要设置 namespace的。 pv是不需要指定 namespace 的
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs
+  selector:
+    matchLabels:
+      pv: nfs-pv001
+
+
+# 一个 pv 只能挂一个 pvc
+
+
+
+
+
+
