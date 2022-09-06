@@ -253,25 +253,115 @@ spec:
 
 
 
+
+
+
 taint & toleration：
     taint: 
-        在一类服务器上打上污点，让不能容忍这个污点的pod不能部署在打了污点的服务器上。
+        在一类服务器上打上污点，让不能容忍这个污点的pod不能部署在打了污点的服务器上。定义在node上。
         Node节点有多个Taint，每个Taint都需要容忍才能部署上去。
-        kubectl taint node k8s-master master-test=test:NoSchedule  #符合master-test=test的才会调度到这台节点上，其他禁止调度
-        kubectl taint node k8s-master master-test=test:NoExecute #符合master-test=test的才会调度到这台节点上，否则会被立马驱逐
 
         允许master节点部署pod
         kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
         
         如果不允许调度
-        kubectl taint nodes master1 node-role.kubernetes.io/master=:NoSchedule
+        kubectl taint nodes k8s-master node-role.kubernetes.io/master=:NoSchedule
         污点可选参数
         NoSchedule: 一定不能被调度
         PreferNoSchedule: 尽量不要调度
         NoExecute: 不仅不会调度, 还会驱逐Node上已有的Pod
 
+        Taint的效果是NoSchedule。这意味着除非pod明确声明可以容忍这个Taint，否则就不会被调度到 k8s-master 上
 
-    
+        删除污点：
+            kubectl taint nodes k8s-master master:NoSchedule-  #只删除 master 下的 NoSchedule 污点
+            kubectl taint node k8s-master master- #删除master整个污点
+
+    Toleration:
+        定义在pod上。
+        让pod能够（注意，只是能够，而非必须）运行在标注了Taint的node上。 
+        operator 的默认值是 Equal;
+        如果 operator 是 Exists （此时容忍度不能指定 value）
+        如果 operator 是 Equal ，则它们的 value 应该相等
+        如果 operator 不指定，则默认为Equal
+        如果 effect 为空，则可以与所有键名 key1 的效果相匹配.
+        -----------> (一对key和value，可以对应对个污点，所以 effect是指定具体是哪个污点，不指定则匹配所有
+            例如：master=true 可以对应多个
+            kubectl taint node k8s-master master=true:NoExecute
+            kubectl taint node k8s-master master=true:NoSchedule
+        
+        tolerations:
+        - key: "key1"
+          operator: "Equal"
+          value: "value1"
+          effect: "NoSchedule"
+
+        tolerations:
+        - key: "key1"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 3600  #如果 Pod 存在一个 effect 值为NoExecute的容忍度指定了可选属性tolerationSeconds的值，则表示在给节点添加了上述污点之后， Pod 还能继续在节点上运行的时间
+        
+
+
+
+#打污点
+[root@k8s-master ~]# kubectl taint node k8s-master master=true:NoSchedule
+node/k8s-master tainted
+
+#跑一个nginx，不设置容忍，结果如下：
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+Type     Reason            Age   From               Message
+  ----     ------            ----  ----               -------
+Warning  FailedScheduling  26s   default-scheduler  0/1 nodes are available: 1 node(s) had untolerated taint {master: true}.
+preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.
+
+# 1 node(s) had untolerated taint {master: true}。 一个节点有不能容忍的污点
+
+#给pod中加入污点容忍：
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: ingress-nginx-test
+  name: nginx-deployment-taint
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+      tolerations:  #可以容忍节点上有污点，master=true:NoSchedule 的
+      - key: "master"
+        value: "true"
+        effect: "NoSchedule"
+
+      # 这个应该是新写法？
+      tolerations:
+        - effect: NoExecute
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+          tolerationSeconds: 300
+        - effect: NoExecute
+          key: node.kubernetes.io/unreachable
+          operator: Exists
+          tolerationSeconds: 300
+
+
+
+
 
 
 

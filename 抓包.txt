@@ -1,0 +1,14 @@
+#抓包，没有/bin/bash 的容器，抓容器的包
+
+1、找到容器ID，并打印它的NS ID
+docker inspect --format "{{.State.Pid}}"  16938de418ac
+2、进入此容器的网络Namespace
+nsenter -n -t  54438
+3、抓DNS包
+tcpdump -i eth0 udp dst port 53|grep youku.com
+
+
+
+
+
+
