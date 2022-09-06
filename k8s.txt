@@ -362,6 +362,274 @@ spec:
 
 
 
+
+
+## Affinity 亲和性
+    nodeSelector
+        这个是直接去选择要部署的node的标签
+        定向，精准调度策略
+        通过node的label来匹配
+
+        查看node的label
+            kubectl get nodes --show-labels
+        给node增加label
+            kubectl label nodes node1 app=test
+        node删除label，名字加一个减号
+            kubectl label nodes k8s app-
+        修改label
+            kubectl label nodes k8s label/env=test1 --overwrite
+        在 pod 的yaml文件中spec字段添加:
+            这样这个pod就会部署在label是 app=test的 node节点上
+
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nginx
+          labels:
+            env: test
+        spec:
+          containers:
+          - name: nginx
+            image: nginx
+            imagePullPolicy: IfNotPresent
+          nodeSelector:
+            app: test
+
+
+
+    亲和性种类：
+        nodeAffinity(节点亲和性)
+        podAffinity(Pod亲和性)
+
+        同时包含NodeSelector和NodeAffinity：必需同时满足 ########
+
+    控制pod可以部署在哪些node上，不可以在那些node上
+    node的亲和性和 NodeSelector 类似，增强了两点优势：
+
+        1.可以存在软限制，即有优先级策略，可以存在退而求其次的情况
+        2.可以延伸出Pod质检的亲和互斥关系，依据节点正在运行的其他Pod的标签进行限制
+
+    调度策略：
+        软策略与硬策略
+        软策略：满足条件最好，不满足也可以。preferredDuringSchedulingIgnoredDuringExecution
+        硬策略：必须满足，不然就不干了。requiredDuringSchedulingIgnoredDuringExecution
+
+
+
+    --------------------- 举例 ----------------------------
+    #给node设置一个label
+        #kubectl label node k8s-master node=master
+
+    #kubectl get nodes --show-labels
+    NAME         STATUS   ROLES           AGE   VERSION   LABELS
+    k8s-master   Ready    control-plane   9d    v1.24.4   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,ingress=true,
+    kubernetes.io/arch=amd64,kubernetes.io/hostname=k8s-master,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,
+    node.kubernetes.io/exclude-from-external-load-balancers=,node=master
+
+    #给deployment设置亲和力node不为master
+
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      namespace: ingress-nginx-test
+      name: nginx-deployment-affinity
+    spec:
+      selector:
+        matchLabels:
+          app: nginx
+      replicas: 2
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          containers:
+            - name: nginx
+              image: nginx:alpine
+              ports:
+                - containerPort: 80
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: node
+                    operator: NotIn
+                    values:
+                    - master
+
+    则部署的结果：
+         不符合node的亲和力
+         Warning  FailedScheduling  2m24s  default-scheduler
+         0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling
+
+    修改：
+        requiredDuringSchedulingIgnoredDuringExecution  -->  preferredDuringSchedulingIgnoredDuringExecution
+
+    # 下面同样是 node not in master，还是调度到了 master上，这个就是软调度
+
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      namespace: ingress-nginx-test
+      name: nginx-deployment-affinity
+    spec:
+      selector:
+        matchLabels:
+          app: nginx
+      replicas: 2
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          containers:
+            - name: nginx
+              image: nginx:alpine
+              ports:
+                - containerPort: 80
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 1
+                preference:
+                  matchExpressions:
+                  - key: node
+                    operator: NotIn
+                    values:
+                    - master
+
+    # requiredDuringSchedulingIgnoredDuringExecution 和  preferredDuringSchedulingIgnoredDuringExecution 可以同时存在
+
+    注：
+    	如果指定多个nodeSelectorTerms，满足其中一个即可
+    	如果指定多个matchExpressions，必须满足所有
+    	同时包含NodeSelector和NodeAffinity：必需同时满足
+
+    操作符operator：
+        In：label 的值在某个列表中
+        NotIn：label 的值不在某个列表中
+        Gt：label 的值大于某个值
+        Lt：label 的值小于某个值
+        Exists：某个 label 存在
+        DoesNotExist：某个 label 不存在
+
+
+
+
+    以下是 pod的亲和性：
+        podAffinity
+        根据在节点上正在运行的Pod标签进行判断和调度
+        是倾向于与某些满足条件的pod部署在一起。可以跨namespace的。也就是说与之匹配的pod在哪个node，则自己就部署在哪个节点上
+
+        topologykey: 调度范围
+            不同的key不同的value是属于不同的拓扑域
+            如果加了拓扑域 topologyKey，则要满足拓扑域，满足亲和力的pod或者node要满足相同的拓扑域
+            例如：
+                在用反亲和力时，如果加了拓扑域，则可以实现应用不会部署在相同的拓扑域中、（如果拓扑域是不同地域，这实现了跨地域多活）
+
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: with-pod-affinity
+    spec:
+      affinity:
+        podAffinity:   #pod的亲和。当区域目标节点上且至少运行了一个，键security且值为S1的标签的pod，才可以将该pod调度节点上
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: security
+                operator: In
+                values:
+                - S1
+            topologyKey: failure-domain.beta.kubernetes.io/zone   #内置节点标签
+
+        podAntiAffinity:  #pod的反亲和。和上面相反，如果区域目标节上具有键"security"和值"S2"的标签的pod处于相同的区域，pod不能被调度到该节点上
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: security
+                  operator: In
+                  values:
+                  - S2
+              topologyKey: failure-domain.beta.kubernetes.io/zone
+      containers:
+      - name: with-pod-affinity
+        image: k8s.gcr.io/pause:2.0
+
+    内置节点：
+        # kubectl get node -owide --show-labels 能看到部分node默认的标签
+
+        kubernetes.io/hostname   主机范围/node范围
+        failure-domain.beta.kubernetes.io/zone  区域范围
+        failure-domain.beta.kubernetes.io/region
+        beta.kubernetes.io/instance-type
+        kubernetes.io/os  系统范围
+        kubernetes.io/arch  发行版
+
+    topologyKey说明
+        topologyKey 可以是任何合法的标签键。然而，出于性能和安全原因，topologyKey 受到一些限制
+
+    对于亲和与 requiredDuringSchedulingIgnoredDuringExecution 要求的 pod
+    反亲和，topologyKey 不允许为空。
+
+    对于 requiredDuringSchedulingIgnoredDuringExecution 要求的 pod 反亲和，准入控制器
+    LimitPodHardAntiAffinityTopology 被引入来限制 topologyKey 不为
+    kubernetes.io/hostname。如果你想使它可用于自定义拓扑结构，你必须修改准入控制器或者禁用它。
+
+    对于 preferredDuringSchedulingIgnoredDuringExecution 要求的 pod 反亲和，空的
+    topologyKey 被解释为“所有拓扑结构”（这里的“所有拓扑结构”限制为
+    kubernetes.io/hostname，failure-domain.beta.kubernetes.io/zone 和
+    failure-domain.beta.kubernetes.io/region 的组合）。
+
+    除上述情况外，topologyKey 可以是任何合法的标签键。
+
+
+    apiVersion: apps/v1beta1
+    kind: Deployment
+    metadata:
+      name: affinity
+      labels:
+        app: affinity
+    spec:
+      replicas: 2
+      revisionHistoryLimit: 15
+      template:
+        metadata:
+          labels:
+            app: affinity
+        spec:
+          containers:
+          - name: nginx
+            image: nginx
+            ports:
+            - containerPort: 80
+              name: nginxweb
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:  # 硬策略
+              - labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - busybox-pod
+                topologyKey: kubernetes.io/hostname
+
+    解释：如果一个节点上面有一个app=busybox-pod这样的 pod 的话，那么我们的 pod 就别调度到这个节点上面来
+
+
+    举例：
+
+    在该Pod中，硬限制与security=s1的Pod在同一个zone中
+    于此同时互斥调度配置为不与app=nginx的Pod在同一Node上
+
+
+
+
+
 临时容器：
     在原有pod上，添加一个临时的Container。这个container包含需要排查的工具，类似 netstat , ps, top, jmap, jstat 等
     建议直接安装：1.25系统
@@ -431,6 +699,18 @@ spec:
 
 
 
+
+
+## RBAC
+    基于角色的访问控制。Role-Based Access Control。
+    是一种基于企业内个人角色来管理一些资源的访问方法
+
+    jenkins使用基于角色的用户权限管理。
+
+    RBAC：4个顶级资源，Role, ClusterRole, RoleBinding, ClusterRoleBinding
+
+    Role: 角色，包含一组权限的规则。没有拒绝规则，只有附加允许。Namespace隔离，只作用于名称空间内。
+    ClusterRole 和 Role 的区别，Role只能作用在 Namespace中。ClusterRole针对整个集群。
 
 
 

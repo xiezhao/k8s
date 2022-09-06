@@ -12,12 +12,6 @@ ingress：
         然后我们可以访问边缘节点中 Ingress Controller 暴露的端口，这样外部就可以访问到 Ingress Controller 了
 
 
-
-
-
-
-
-
 helm安装ingress:
     helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
     helm repo list #查看添加的helm仓库
