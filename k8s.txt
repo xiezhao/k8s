@@ -362,9 +362,72 @@ spec:
 
 
 
+临时容器：
+    在原有pod上，添加一个临时的Container。这个container包含需要排查的工具，类似 netstat , ps, top, jmap, jstat 等
+    建议直接安装：1.25系统
+    EphemeralContainers	true	Beta	1.23	1.24
+    EphemeralContainers	true	GA	1.25	-
 
+    1.24配置
+        vim /var/lib/kubelet/config.yaml
+        末尾添加：
+        featureGates:
+          EphemeralContainers: true
 
+        systemctl daemon-reload
+        systemctl restart kubectl
+        如果是二进制安装：则要改所有的组件 kube-apiserver kube-proxy kube-controller-manager 等
 
+    https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/#ephemeral-container
+
+    #添加了一个临时容器
+    kubectl debug -ti nginx-deployment-656f474ddc-jhdqk -n ingress-nginx-test --image=busybox:1.28 --target=nginx
+    #查看添加进去的容器
+    kubectl describe pod nginx-deployment-656f474ddc-jhdqk -n ingress-nginx-test
+
+    Containers:
+      nginx:
+        Container ID:   docker://2c3981fb9078894b6096ee4d51e01bbdf6ba30563a29ef9362e88f705292bfc3
+        Image:          nginx:alpine
+        Image ID:       docker-pullable://nginx@sha256:082f8c10bd47b6acc8ef15ae61ae45dd8fde0e9f389a8b5cb23c37408642bf5d
+        Port:           80/TCP
+        Host Port:      0/TCP
+        State:          Running
+          Started:      Tue, 06 Sep 2022 10:17:49 +0800
+        Ready:          True
+        Restart Count:  0
+        Environment:    <none>
+        Mounts:
+          /usr/share/nginx/html from www (rw)
+          /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hznzw (ro)
+    Ephemeral Containers:
+      debugger-86w8t:
+        Container ID:   docker://620c4eff47bd9803db9e249728f70d7e864e92154ebb5572f045d9b1dd84c9c5
+        Image:          busybox:1.28
+        Image ID:       docker-pullable://busybox@sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47
+        Port:           <none>
+        Host Port:      <none>
+        State:          Terminated
+          Reason:       Completed
+          Exit Code:    0
+          Started:      Tue, 06 Sep 2022 17:42:09 +0800
+          Finished:     Tue, 06 Sep 2022 17:48:17 +0800
+        Ready:          False
+        Restart Count:  0
+        Environment:    <none>
+        Mounts:         <none>
+      debugger-stv76:
+        Container ID:   docker://911547f4f6d20235c1d7754af05eff48d9aa6e683abe8dc5a6dacb43c127882e
+        Image:          busybox:1.28
+        Image ID:       docker-pullable://busybox@sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47
+        Port:           <none>
+        Host Port:      <none>
+        State:          Running     ################### 正在运行中
+          Started:      Tue, 06 Sep 2022 17:48:45 +0800
+        Ready:          False
+        Restart Count:  0
+        Environment:    <none>
+        Mounts:         <none>
 
 
 
