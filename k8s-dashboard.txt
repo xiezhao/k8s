@@ -1,4 +1,40 @@
+1. 把 kubernetes-dashboard 中的 8443端口全部改为 9090
+    service，deployment，以及 livenessProbe
 
-https://cloud.tencent.com/developer/article/1638856
+2. kubernetes-dashboard 的 Deployment中 
+    args：修改为如下，其他删除
 
-https://www.containiq.com/post/intro-to-kubernetes-dashboards
+  args:
+    - --namespace=kubernetes-dashboard
+    - --insecure-port=9090
+    - --enable-insecure-login=true
+
+    livenessProbe:
+            httpGet:
+              scheme: HTTP #修改为 HTTP 之前是HTTPS
+
+
+3. ingress创建
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: k8s-dashboard.interviewcomplete.com
+  namespace: kubernetes-dashboard
+spec:
+  rules:
+  - host: k8s-dashboard.interviewcomplete.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kubernetes-dashboard
+            port:
+              number: 9090
+
+
