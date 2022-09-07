@@ -712,6 +712,9 @@ spec:
     Role: 角色，包含一组权限的规则。没有拒绝规则，只有附加允许。Namespace隔离，只作用于名称空间内。
     ClusterRole 和 Role 的区别，Role只能作用在 Namespace中。ClusterRole针对整个集群。
 
+    Rolebinding 将 ServiceAccount 和 Role 绑定在一起、
+
+
 
 
 
