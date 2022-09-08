@@ -714,6 +714,59 @@ spec:
 
     Rolebinding 将 ServiceAccount 和 Role 绑定在一起、
 
+    ### 实践
+        通常，创建一个 ClusterRole 去分配一个角色权限，最后在绑定到namespace给某个用户
+
+
+
+
+# QoS
+
+
+
+
+# PodPreset
+    Pod Preset是API资源，在Pod创建时可以使用它将额外的运行时需求注入到里面。
+    pod的预配置
+        将一些公用的参数设置到pod中去
+        比如添加一些变量，挂载卷，配置容器的时间，字符集等
+
+    1. 配置（kubeadm安装的）
+        因为是用kubeadm安装。要修改的是 apiservice的资源。
+        kubeadm安装的，apiservice等各个组件是以docker image的形式运行的。
+
+        [root@k8s-master manifests]# kubectl get pods -A | grep kube-apiserver
+        kube-system            kube-apiserver-k8s-master                        1/1     Running   0          10d
+
+        在kubelet的启动文件中有个 /var/lib/kubelet/config.yaml文件，里面有一个: staticPodPath: /etc/kubernetes/manifests
+        api-server是通过staitcpod的形式运行在k8s中的。
+        kubeadm安装的apiserver是Static Pod，它的配置文件被修改后，立即生效
+
+        # Kubelet 会监听该文件的变化，当您修改了 /etc/kubenetes/manifest/kube-apiserver.yaml 文件之后，kubelet 将自动终止原有的 kube-apiserver-{nodename} 的 Pod，并自动创建一个使用了新配置参数的 Pod 作为替代。
+        # 如果您有多个 Kubernetes Master 节点，您需要在每一个 Master 节点上都修改该文件，并使各节点上的参数保持一致。
+
+        [root@k8s-master manifests]# cd /etc/kubernetes/manifests
+        [root@k8s-master manifests]# ls
+        etcd.yaml  kube-apiserver.yaml  kube-controller-manager.yaml  kube-scheduler.yaml
+
+        1.1
+        ---> 所以 修改这个 kube-apiserver.yaml 然后加入
+                --runtime-config=settings.k8s.io/v1alpha1=true
+        1.2
+            还要配置另外一个，自行百度
+
+
+
+
+#dashboard 基于用户名和密码认证
+    修改认证文件后，需要重启集群，生产不推荐
+
+
+
+#
+
+
+
 
 
 
