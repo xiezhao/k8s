@@ -8,6 +8,9 @@
     <artifactId>micrometer-registry-prometheus</artifactId>
 </dependency>
 
+
+
+
 如果要自定义加入以下依赖
 
 <dependency>
@@ -39,7 +42,8 @@ public Greeting getGreeting() {
 
 #可以自己写一个健康检查接口，用来做监控检查
 
-
+配置文件：
+    application.properties
 
 management.endpoints.web.exposure.include=health,info,prometheus
 management.endpoint.prometheus.enabled=true

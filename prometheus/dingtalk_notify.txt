@@ -1,0 +1,77 @@
+1. prometheus-webhook-dingtalk 安装
+
+    wget https://github.com/timonwong/prometheus-webhook-dingtalk/releases/download/v2.1.0/prometheus-webhook-dingtalk-2.1.0.linux-arm64.tar.gz
+    tar xf prometheus-webhook-dingtalk-2.1.0.linux-arm64.tar.gz
+    mv prometheus-webhook-dingtalk-2.1.0.linux-amd64 /usr/local/prometheus-webhook-dingtalk
+    cd /usr/local/prometheus-webhook-dingtalk
+
+    1. 启动webhook dingtalk插件：
+        nohup /usr/local/prometheus-webhook-dingtalk/prometheus-webhook-dingtalk --config.file=/usr/local/prometheus-webhook-dingtalk/config.yml --web.enable-ui &
+
+    2。 复制钉钉机器人的webhook地址和安全码，配置prometheus-webhook-dingtalk，在dingtalk-webhook中引用模板
+        # cp /usr/local/prometheus-webhook-dingtalk/config.example.yml /usr/local/prometheus-webhook-dingtalk/config.yml
+        # vim /usr/local/prometheus-webhook-dingtalk/config.yml
+
+        # 配置钉钉消息模板
+        templates:
+          - /usr/local/alertmanager/tmpl/dingding.tmpl
+        targets:
+          webhook1:
+            url: https://oapi.dingtalk.com/robot/send?access_token=0df1718b6cfcf31690ae27b4dcc588c91c10a772131677ef688fe3f819ed387e
+            # secret for signature
+            #secret: SECd4a3xxxxxxxxxxxxx
+            message:
+              title: '{{ template "ops.title" . }}'   # 引用模版
+              text: '{{ template "ops.content" . }}'
+
+
+2. alertmanger配置钉钉告警
+
+# vim /usr/local/alertmanager/alertmanager.yml
+
+templates:
+  - '/usr/local/alertmanager/tmpl/*.tmpl'
+route:
+  group_by: ['alertname']
+  group_wait: 5s
+  group_interval: 10s
+  repeat_interval: 10m
+  receiver: 'dingtalk'
+receivers:
+- name: 'dingtalk'
+  webhook_configs:
+  - url: 'http://localhost:8060/dingtalk/webhook1/send'
+    send_resolved: true
+
+
+
+
+
+
+
+
+# 邮件通知
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.163.com:25'
+  smtp_from: 'xiezhao_appid_us@163.com'
+  smtp_auth_username: 'xiezhao_appid_us@163.com'
+  smtp_auth_password: 'QHJFFNHTBBNFCIGS'
+  smtp_require_tls: false
+
+templates:
+  - '/usr/local/alertmanager/tmpl/*.tmpl'
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 20s
+  receiver: 'mail'
+receivers:
+- name: 'mail'
+  email_configs:
+  - to: 'xiezhao_appid_us@163.com'
+    html: '{{ template "email.html" . }}' #引用邮箱模版
+    send_resolved: true

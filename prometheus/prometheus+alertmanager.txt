@@ -6,14 +6,7 @@
     因为Prometheus会把所有的主机暴露这个metrics的数据查出来
 
 
-
-
-
-
-
-
 1. prometheus安装
-
 
 # /lib/systemd/system/prometheus.service
 [Unit]
@@ -41,7 +34,13 @@ systemctl start prometheus
 
 
 2. grafana
-    直接docker安装就可以
+    2.1 直接docker安装就可以
+    2.2 可以rpm安装
+        https://grafana.com/grafana/download
+        wget https://dl.grafana.com/enterprise/release/grafana-enterprise-8.3.6-1.x86_64.rpm
+        sudo yum install grafana-enterprise-8.3.6-1.x86_64.rpm
+        systemctl start grafana-server.service
+        http://ip:3000/login
 
 
 3. alertmanager安装
@@ -70,14 +69,6 @@ systemctl start alertmanager
   ./promtool check config prometheus.yml
 重新加载配置文件：
   curl -X POST http://localhost:9090/-/reload
-
-
-
-
-
-
-
-
 
 
 
@@ -127,8 +118,25 @@ groups:
         metric_type: root_partition_monitor
 
 
-
 node_alerts.yml
+
+
+[root@VM-4-3-centos alerts]# cat springboot_alerts.yml
+groups:
+  - name: springboot_alerts
+    rules:
+    - alert: springboot_health_check
+      expr: http_response_result_code != 0
+      for: 10s   #持续时间
+      labels:
+        severity: warning
+      annotations:
+        #发出的告警标题
+        summary: "实例 {{ $labels.instance }} health check failure."
+        #发出的告警内容
+        description: "实例{{ $labels.instance }} health check failure."
+
+
 
 
 

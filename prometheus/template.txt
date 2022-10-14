@@ -1,0 +1,147 @@
+[root@VM-4-3-centos tmpl]# cat email.tmpl
+
+{{ define "email.html" }}
+    {{ range .Alerts }}
+<pre>
+    ========start==========
+    告警程序: prometheus_alert
+    告警级别: {{ .Labels.severity }}
+    告警类型: {{ .Labels.alertname }}
+    故障主机: {{ .Labels.instance }}
+    告警主题: {{ .Annotations.summary }} # Annotations这里根据prometheus规则中的实际字段填写
+    告警详情: {{ .Annotations.description }}
+    触发时间: {{ (.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}  # 注意：.StartsAt.Format "2006-01-02 15:04:05"的参数一定不能乱填，这里定义的时间为go语言的诞生时间！！！如果填错时间会乱码。
+    ========end==========
+</pre>
+    {{ end }}
+{{ end }}
+
+
+
+========start==========
+告警程序: prometheus_alert
+告警级别: warning
+告警类型: springboot_health_check
+故障主机: localhost:9273
+告警主题: 实例 localhost:9273 health check failure. # Annotations这里根据prometheus规则中的实际字段填写
+告警详情: 实例localhost:9273 health check failure.
+触发时间: 2022-10-13 17:53:26  # 注意：.StartsAt.Format "2006-01-02 15:04:05"的参数一定不能乱填，这里定义的时间为go语言的诞生时间！！！如果填错时间会乱码。
+========end==========
+
+
+
+
+
+
+
+钉钉模板1：
+    vim /usr/local/alertmanager/tmpl/dingding.tmpl
+
+
+{{ define "__subject" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]
+{{ end }}
+
+
+{{ define "__alert_list" }}{{ range . }}
+---
+    告警程序: prometheus_alert
+    告警级别: {{ .Labels.severity }}
+    告警类型: {{ .Labels.alertname }}
+    故障主机: {{ .Labels.instance }}
+    告警主题: {{ .Annotations.summary }}
+    触发时间: {{ (.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+{{ end }}{{ end }}
+
+{{ define "__resolved_list" }}{{ range . }}
+---
+    告警程序: prometheus_alert
+    告警级别: {{ .Labels.severity }}
+    告警类型: {{ .Labels.alertname }}
+    故障主机: {{ .Labels.instance }}
+    告警主题: {{ .Annotations.summary }}
+    触发时间: {{ (.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+    恢复时间: {{ (.EndsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+{{ end }}{{ end }}
+
+
+{{ define "ops.title" }}
+{{ template "__subject" . }}
+{{ end }}
+
+{{ define "ops.content" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+**====侦测到{{ .Alerts.Firing | len  }}个故障====**
+{{ template "__alert_list" .Alerts.Firing }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+**====恢复{{ .Alerts.Resolved | len  }}个故障====**
+{{ template "__resolved_list" .Alerts.Resolved }}
+{{ end }}
+{{ end }}
+
+{{ define "ops.link.title" }}{{ template "ops.title" . }}{{ end }}
+{{ define "ops.link.content" }}{{ template "ops.content" . }}{{ end }}
+{{ template "ops.title" . }}
+{{ template "ops.content" . }}
+
+
+
+
+
+
+
+钉钉模板2：
+
+{{ define "__subject" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]
+{{ end }}
+
+
+{{ define "__alert_list" }}{{ range . }}
+---
+    告警程序: prometheus_alert
+    告警级别: {{ .Labels.severity }}
+    告警类型: {{ .Labels.alertname }}
+    故障主机: {{ .Labels.host }}
+    告警主题: {{ .Annotations.summary }}
+    触发时间: {{ (.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+{{ end }}{{ end }}
+
+{{ define "__resolved_list" }}{{ range . }}
+---
+    告警程序: prometheus_alert
+    告警级别: {{ .Labels.severity }}
+    告警类型: {{ .Labels.alertname }}
+    故障主机: {{ .Labels.host }}
+    告警主题: {{ .Annotations.summary }}
+    触发时间: {{ (.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+    恢复时间: {{ (.EndsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+{{ end }}{{ end }}
+
+
+{{ define "ops.title" }}
+{{ template "__subject" . }}
+{{ end }}
+
+{{ define "ops.content" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+**====侦测到{{ .Alerts.Firing | len  }}个故障====**
+{{ template "__alert_list" .Alerts.Firing }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+**====恢复{{ .Alerts.Resolved | len  }}个故障====**
+{{ template "__resolved_list" .Alerts.Resolved }}
+{{ end }}
+{{ end }}
+
+{{ define "ops.link.title" }}{{ template "ops.title" . }}{{ end }}
+{{ define "ops.link.content" }}{{ template "ops.content" . }}{{ end }}
+{{ template "ops.title" . }}
+{{ template "ops.content" . }}
+
+

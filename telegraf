@@ -1,9 +1,3 @@
-安装telegraf 然后修改prometheus 然后用pastat_looking_up 先监控进程 
-然后再用exec 写脚本监控接口
-
-
-
-
 #下载二进制包
 wget https://ghproxy.com/https://github.com/influxdata/telegraf/archive/refs/tags/v1.22.4.tar.gz
 tar xf v1.22.4.tar.gz -C /opt
@@ -11,7 +5,7 @@ mv /opt/telegraf-1.22.4/   /opt/telegraf
 
 
 #将telegraf添加至systemd管理
-cat <<  eof  >> /etc/systemd/system/telegraf.service 
+cat <<  eof  >> /etc/systemd/system/telegraf.service
 [Unit]
 Description="telegraf"
 After=network.target
@@ -40,6 +34,52 @@ systemctl daemon-reload
 
 
 
+
+
+
+
+安装telegraf 然后修改prometheus 然后用procstat_lookup_running 先监控进程
+然后再用exec 写脚本监控接口
+
+
+telegraf：启用
+     [[inputs.procstat]]
+        pattern = "alertmanager-springboot"
+procstat_lookup_running:
+    procstat_lookup_running{host="VM-4-3-centos",pattern="alertmanager-springboot",pid_finder="pgrep",result="success"} 1
+
+
+exec:
+
+     [[inputs.exec]]
+       commands = ["/tmp/test.sh"]
+       timeout = "5s"
+       data_format = "prometheus"
+       name_suffix = "_mycollector"
+
+
+     [root@VM-4-3-centos tmp]# cat test.sh
+     #!/bin/sh
+     echo 'ssh_sessions 1'
+
+
+     # cat health_check.sh
+
+        #!/bin/bash
+        port=$1
+        echo springboot_health `curl localhost:$port/actuator/health -s | grep "UP" | wc -l`
+
+    得到结果：
+        prometheus_mycollector_ssh_sessions{host="VM-4-3-centos"} 1
+
+        prometheus_mycollector_ssh_sessions_1{host="VM-4-3-centos"} 1
+
+        prometheus_springboot_health{host="VM-4-3-centos"} 0
+
+
+
+
+
 测试：
     telegraf --config /etc/telegraf/telegraf.conf --test --input-filter http_response
 
@@ -55,16 +95,49 @@ systemctl daemon-reload
    fielddrop = ["result_type", "string_found"]
    tagexclude = ["result"]
 
-//检查URL
+  #挂掉
+ net_response_result_code{host="VM-4-3-centos",port="8088",protocol="tcp",result="connection_failed",result_type="connection_failed",server="localhost"} 2
+  #正常
+ net_response_result_code{host="VM-4-3-centos",port="8080",protocol="tcp",result="success",result_type="success",server="localhost"} 0
 
+//检查URL
  [[inputs.http_response]]
     urls = ["http://172.29.214.134:9900/actuator/healthz/liveness"]
     method = "GET"
     response_string_match = "\".*status\".?:.?\"UP\""
 
+#正常情况
+http_response_http_response_code{host="VM-4-3-centos",method="GET",result="success",result_type="success",server="http://localhost:8080/actuator/health",status_code="200"} 200
+http_response_response_string_match{host="VM-4-3-centos",method="GET",result="success",result_type="success",server="http://localhost:8080/actuator/health",status_code="200"} 1
+http_response_response_time{host="VM-4-3-centos",method="GET",result="success",result_type="success",server="http://localhost:8080/actuator/health",status_code="200"} 0.019116783
+http_response_result_code{host="VM-4-3-centos",method="GET",result="success",result_type="success",server="http://localhost:8080/actuator/health",status_code="200"} 0
+
+#挂掉情况 - 只有下面一条
+http_response_result_code{host="VM-4-3-centos",method="GET",result="connection_failed",result_type="connection_failed",server="http://localhost:8080/actuator/health",status_code=""} 3
 
 
 
-http_response_response_string_match{host="prometheus",method="GET",result="success",result_type="success",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code="200"} 1
-http_response_result_code{host="prometheus",method="GET",response_body="",result="connection_failed",result_type="connection_failed",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code=""} 3
-http_response_result_code{host="prometheus",method="GET",response_body="{\"status\":\"UP\"}",result="success",result_type="success",server="http://172.29.214.134:9900/actuator/healthz/liveness",status_code="200"} 0
+
+
+
+
+
+
+http_response_http_response_code == 200 and http_response_result_code == 0 and http_response_response_string_match == 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

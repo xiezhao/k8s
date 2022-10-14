@@ -1,0 +1,18 @@
+
+
+[root@VM-4-3-centos ~]# cat /usr/local/alertmanager/alerts/springboot_alerts.yml
+
+
+groups:
+  - name: springboot_alerts
+    rules:
+    - alert: springboot_health_check
+      expr: http_response_result_code != 0
+      for: 10s   #持续时间
+      labels:
+        severity: warning
+      annotations:
+        #发出的告警标题
+        summary: "实例 {{ $labels.host }} health check failure."
+        #发出的告警内容
+        description: "实例{{ $labels.host }} health check failure."
