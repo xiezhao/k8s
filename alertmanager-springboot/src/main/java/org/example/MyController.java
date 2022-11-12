@@ -3,14 +3,18 @@ package org.example;
 import com.alibaba.fastjson2.JSONObject;
 import com.offbytwo.jenkins.JenkinsServer;
 import com.offbytwo.jenkins.model.JobWithDetails;
+import com.sun.xml.internal.xsom.XSUnionSimpleType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -75,10 +79,15 @@ public class MyController {
         String project = s[0];
         String env = s[1];
         String branch = s[2];
+        String frontBranch = s[3];
 
         HashMap<String, String> map = new HashMap<>();
         map.put("deployEnv", env);
         map.put("branch", branch);
+
+        if (StringUtils.hasLength(frontBranch)) {
+            map.put("project", frontBranch);
+        }
 
         try {
             JenkinsServer jenkins = new JenkinsServer(new URI("https://jks.jaalantech.com"), "xiezhao", "xiezhao");
@@ -88,5 +97,33 @@ public class MyController {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public static class T {
+        private String name;
+
+        public T(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+
+    public static void main(String[] args) {
+        List<T> a = new ArrayList();
+        a.add(new T("a"));
+        a.add(new T("b"));
+        a.add(new T("c"));
+
+        a.get(0).setName("a1");
+        a.get(a.size() - 1).setName("c2");
+
+        System.out.println(a);
     }
 }
