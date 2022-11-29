@@ -1,8 +1,14 @@
-Operator:
-    主要用于有状态的服务，或者用于比较复杂应用的管理。
-
-
 
 Helm:
     主要用于无状态的服务，配置分离。
 
+# 添加仓库
+$ helm repo add stable http://mirror.azure.cn/kubernetes/charts
+$ helm repo add aliyun  https://kubernetes.oss-cn-hangzhou.aliyuncs.com/charts
+$ helm repo add jetstack https://charts.jetstack.io
+$ helm repo update  # 更新仓库
+
+
+
+Operator:
+    主要用于有状态的服务，或者用于比较复杂应用的管理。
