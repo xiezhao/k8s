@@ -39,3 +39,6 @@ docker打包镜像：
         vim /usr/lib/systemd/system/cri-docker.service
         修改：
             ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7
+
+
+rpm -ivh http://mirrors.wlnmp.com/centos/wlnmp-release-centos.noarch.rpm

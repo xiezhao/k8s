@@ -1,9 +1,16 @@
 #!/bin/bash
 
-hostnamectl set-hostname k8s-master
+ip=10.0.4.3
+hostname=k8s-master
+
+
+hostnamectl set-hostname $hostname
+#hostname在每个节点上都要安装，建议这里直接手动填好
 
 cat >> /etc/hosts << EOF 
-10.0.4.3 k8s-master
+$ip $hostname
+192.168.11.130 node1
+192.168.11.131 node2
 EOF
 
 
@@ -45,12 +52,20 @@ EOF
 sysctl --system
 
 # insatll ntpdate sync time
-rpm -ivh http://mirrors.wlnmp.com/centos/wlnmp-release-centos.noarch.rpm
-dnf install wntp -y 
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-echo 'Asia/Shanghai' > /etc/timezone
-ntpdate ntp3.aliyun.com 
-crontab -l > conf && echo "*/5 * * * * ntpdate ntp3.aliyun.com" >> conf && crontab conf && rm -f conf
+# rpm -ivh http://mirrors.wlnmp.com/centos/wlnmp-release-centos.noarch.rpm
+# dnf install wntp -y 
+# ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+# echo 'Asia/Shanghai' > /etc/timezone
+# ntpdate ntp3.aliyun.com 
+# crontab -l > conf && echo "*/5 * * * * ntpdate ntp3.aliyun.com" >> conf && crontab conf && rm -f conf
+
+
+##  通过chrony的方式进行同步时间
+yum -y install chrony
+echo "server ntp.aliyun.com iburst" >> /etc/chrony.conf
+systemctl restart chronyd.service
+
+
 
 # config limit
 ulimit -SHn 65535
@@ -102,7 +117,11 @@ cat <<EOF | tee /etc/docker/daemon.json
         "max-size": "100m"
     },
     "storage-driver": "overlay2",
-    "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
+    "registry-mirrors": [
+        "https://registry.docker-cn.com",
+        "http://hub-mirror.c.163.com",
+        "https://docker.mirrors.ustc.edu.cn"
+    ]
 }
 EOF
 
@@ -194,8 +213,9 @@ echo "================================ kubeadm init start ======================
 # service-cidr 的选取不能和PodCIDR及本机网络有重叠或者冲突。 
 #一般可以选择一个本机网络和PodCIDR都没有用到的私网地址段
 #比如PODCIDR使用192.168.0.1/16, 那么service cidr可以选择172.16.0.1/20. 主机网段可以选10.1.0.1/8. 三者之间网络无重叠冲突即可
-kubeadm init --cri-socket='unix:///var/run/cri-dockerd.sock' \
---apiserver-advertise-address=10.0.4.3 \
+kubeadm init --kubernetes-version=v1.24.4 \
+--cri-socket='unix:///var/run/cri-dockerd.sock' \
+--apiserver-advertise-address=$ip \
 --image-repository=registry.aliyuncs.com/google_containers \
 --service-cidr=172.16.0.0/12 \
 --pod-network-cidr=192.168.0.0/16
@@ -205,32 +225,4 @@ mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 echo "================================ kubeadm init end =========================================================="
-
-
-#kubeadm join 10.0.4.3:6443 --token lo9z4m.bpmkldela5lmigei \
-#        --discovery-token-ca-cert-hash sha256:677123d92d5bf065fcde1e8f660f0242539000703f811e328a6b9ba0d40320e4
-
-# install calico
-echo "================================ install calico start =========================================================="
-
-cat <<EOF | tee /etc/NetworkManager/conf.d/calico.conf
-[keyfile]
-unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:vxlan-v6.calico;interface-name:wireguard.cali;interface-name:wg-v6.cali
-EOF
-
-sysctl -w net.netfilter.nf_conntrack_max=1000000
-echo "net.netfilter.nf_conntrack_max=1000000" >> /etc/sysctl.conf
-
-
-#给master去掉标记，用于单机环境，这样coredns就可以安装，calico也可以安装了
-kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
-kubectl create -f tigera-operator.yaml
-kubectl create -f custom-resources.yaml
-
-chmod +x calicoctl-linux-amd64
-mv calicoctl-linux-amd64 /usr/local/bin/calicoctl
-
-echo "================================ install calico end =========================================================="
-
-
 
